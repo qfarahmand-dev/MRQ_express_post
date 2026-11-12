@@ -34,6 +34,7 @@ export interface ShipmentEvent {
 export interface Shipment {
   id: string
   trackingNumber: string
+  destinationCountry: string
   sender: PartyInfo
   receiver: PartyInfo
   packageType: PackageType
@@ -47,6 +48,7 @@ export interface Shipment {
 
 export interface ShipmentInput {
   trackingNumber: string
+  destinationCountry: string
   sender: PartyInfo
   receiver: PartyInfo
   packageType: PackageType
@@ -75,7 +77,14 @@ export interface PublicTrackingInfo {
 
 export interface ShipmentStats {
   total: number
-  registered: number
+  inWarehouse: number
   inTransit: number
   delivered: number
+}
+
+export interface ShipmentReports {
+  thisWeek: number
+  thisMonth: number
+  thisYear: number
+  topDestinations: { country: string; total: number }[]
 }

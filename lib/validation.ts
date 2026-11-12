@@ -27,6 +27,7 @@ export function normalizeTrackingNumber(value: string) {
 export function validateShipmentInput(input: ShipmentInput): ShipmentFormErrors {
   const errors: ShipmentFormErrors = {}
   const requiredText: [string, string][] = [
+    ['destinationCountry', input.destinationCountry],
     ['sender.name', input.sender.name],
     ['sender.address', input.sender.address],
     ['receiver.name', input.receiver.name],

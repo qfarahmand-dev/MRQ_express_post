@@ -4,6 +4,7 @@ import type {
   PublicTrackingInfo,
   Shipment,
   ShipmentInput,
+  ShipmentReports,
   ShipmentStats,
   StatusUpdateInput,
 } from '@/types/shipment'
@@ -41,6 +42,7 @@ function sanitize(input: ShipmentInput): ShipmentInput {
   return {
     ...input,
     trackingNumber: normalizeTrackingNumber(input.trackingNumber),
+    destinationCountry: input.destinationCountry.trim().toUpperCase(),
     sender: party(input.sender),
     receiver: party(input.receiver),
     description: input.description.trim(),
@@ -62,6 +64,7 @@ function mapShipment(row: ShipmentRow, events: ReturnType<typeof mapEvent>[]): S
   return {
     id: row.id,
     trackingNumber: row.tracking_number,
+    destinationCountry: row.destination_country,
     sender: { name: row.sender_name, phone: row.sender_phone, address: row.sender_address },
     receiver: { name: row.receiver_name, phone: row.receiver_phone, address: row.receiver_address },
     packageType: row.package_type,
@@ -97,6 +100,7 @@ function shipmentArgs(input: ShipmentInput) {
   const clean = sanitize(input)
   return {
     p_tracking_number: clean.trackingNumber,
+    p_destination_country: clean.destinationCountry,
     p_sender_name: clean.sender.name,
     p_sender_phone: clean.sender.phone,
     p_sender_address: clean.sender.address,
@@ -218,9 +222,26 @@ export const shipmentService = {
 
     return {
       total: Number(stats.total),
-      registered: Number(stats.registered),
+      inWarehouse: Number(stats.in_warehouse),
       inTransit: Number(stats.in_transit),
       delivered: Number(stats.delivered),
+    }
+  },
+
+  async getReports(): Promise<ShipmentReports> {
+    const { data, error } = await getClient().rpc('get_shipment_reports')
+    if (error) throwDatabaseError(error)
+    const reports = data[0]
+    if (!reports) throw new ShipmentServiceError('request_failed', 'Supabase returned no shipment reports')
+
+    return {
+      thisWeek: Number(reports.this_week),
+      thisMonth: Number(reports.this_month),
+      thisYear: Number(reports.this_year),
+      topDestinations: reports.top_destinations.map((destination) => ({
+        country: destination.country,
+        total: Number(destination.total),
+      })),
     }
   },
 }

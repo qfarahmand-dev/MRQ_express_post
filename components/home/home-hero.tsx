@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
+import ceoPhoto from '../../images/CEO.jpg'
+import officeManagerPhoto from '../../images/office Manager.jpg'
+import packerPhoto from '../../images/Packer.jpg'
 import {
   ArrowDown,
   ArrowRight,
@@ -99,6 +102,7 @@ export function HomeHero() {
   const c = t.company
   const serviceIcons = [Plane, Package, Ship, Truck, TrainFront, Boxes, FileCheck2]
   const advantageIcons = [Timer, Globe2, Headset]
+  const teamPhotos = [ceoPhoto, officeManagerPhoto, packerPhoto]
   const statValues = [new Date().getFullYear() - 2013, 20, 1500, 40]
   const statSuffixes = [lang === 'fa' ? '+' : '+', '+', '+', '%']
 
@@ -286,10 +290,14 @@ export function HomeHero() {
           <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {c.teamMembers.map((member, index) => (
               <li key={member.name} className="overflow-hidden rounded-2xl border bg-background shadow-sm">
-                <div className={`flex aspect-[4/3] items-center justify-center ${index === 1 ? 'bg-secondary' : 'bg-primary'}`}>
-                  <div className={`flex size-28 items-center justify-center rounded-full border-4 ${index === 1 ? 'border-primary/15 bg-card text-primary' : 'border-white/20 bg-white/10 text-highlight'}`}>
-                    <UsersRound className="size-12" aria-hidden="true" />
-                  </div>
+                <div className="relative aspect-[4/3] bg-muted">
+                  <Image
+                    src={teamPhotos[index]}
+                    alt={member.name}
+                    fill
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    className="object-cover"
+                  />
                 </div>
                 <div className="p-5">
                   <h3 className="font-bold text-primary">{member.name}</h3>

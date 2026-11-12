@@ -5,7 +5,7 @@ The app has no public sign-up page. Create administrator accounts from the Supab
 ## 1. Create the database
 
 1. Create a Supabase project.
-2. Open **SQL Editor**, paste and run [`migrations/20261112000000_initial_schema.sql`](./migrations/20261112000000_initial_schema.sql).
+2. Open **SQL Editor**, paste and run [`migrations/20261112000000_initial_schema.sql`](./migrations/20261112000000_initial_schema.sql), then [`migrations/20261113000000_destination_reporting.sql`](./migrations/20261113000000_destination_reporting.sql).
 3. Add each approved administrator email to the private allowlist from **SQL Editor**, replacing the example address:
 
    ```sql
@@ -15,7 +15,7 @@ The app has no public sign-up page. Create administrator accounts from the Supab
 4. In **Authentication → Settings**, turn off public sign-ups. The database trigger rejects any Auth user whose email is not allowlisted and gives approved users the only `admin` role.
 5. In **Authentication → Users**, create or invite the approved administrator and set a strong password. Set the user's `full_name` metadata if you want a display name other than the email prefix.
 
-The database creates a profile when an allowlisted Auth user is created or when an existing user's email is added to the allowlist. RLS protects profile, shipment, and event tables. Public shipment tracking uses a restricted RPC and does not expose contact details or full addresses.
+The database creates a profile when an allowlisted Auth user is created or when an existing user's email is added to the allowlist. RLS protects profile, shipment, and event tables. Public shipment tracking uses a restricted RPC and does not expose contact details or full addresses. The reporting migration adds a required destination-country field to new and edited shipments, plus administrator-only shipment summary RPCs. It backfills existing shipments only when their address ends in a recognized country name; other existing shipments should be edited to select their country and are excluded from the ranking until then. Weekly, monthly, and yearly totals use registration dates within the current calendar period.
 
 ## 2. Configure local development
 

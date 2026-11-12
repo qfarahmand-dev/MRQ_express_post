@@ -10,6 +10,7 @@ import { StatusSelect } from '@/components/shipments/status-select'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { destinationCountries } from '@/lib/countries'
 import { useAuth } from '@/contexts/auth-context'
 import { useLanguage } from '@/contexts/language-context'
 import { refreshShipments } from '@/hooks/use-shipments'
@@ -21,6 +22,7 @@ import { PACKAGE_TYPES, type Shipment, type ShipmentInput } from '@/types/shipme
 
 const emptyInput = (): ShipmentInput => ({
   trackingNumber: '',
+  destinationCountry: '',
   sender: { name: '', phone: '', address: '' },
   receiver: { name: '', phone: '', address: '' },
   packageType: 'goods',
@@ -31,6 +33,7 @@ const emptyInput = (): ShipmentInput => ({
 
 const toInput = (s: Shipment): ShipmentInput => ({
   trackingNumber: s.trackingNumber,
+  destinationCountry: s.destinationCountry,
   sender: { ...s.sender },
   receiver: { ...s.receiver },
   packageType: s.packageType,
@@ -57,7 +60,7 @@ function FormSection({ icon: Icon, title, hint, children }: { icon: LucideIcon; 
 }
 
 export function ShipmentForm({ shipment }: { shipment?: Shipment }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const { user } = useAuth()
   const router = useRouter()
   const isEdit = Boolean(shipment)
@@ -173,6 +176,23 @@ export function ShipmentForm({ shipment }: { shipment?: Shipment }) {
       </FormSection>
 
       <FormSection icon={Package} title={t.form.packageSection} hint={t.form.packageHint}>
+        <FormField id="destinationCountry" label={t.form.destinationCountry} required error={errorText('destinationCountry')}>
+          <select
+            id="destinationCountry"
+            value={values.destinationCountry}
+            onChange={(event) => setField('destinationCountry', event.target.value)}
+            aria-invalid={Boolean(errorText('destinationCountry')) || undefined}
+            aria-describedby={errorText('destinationCountry') ? 'destinationCountry-error' : undefined}
+            className={`h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${errorText('destinationCountry') ? 'border-destructive' : 'border-input'}`}
+          >
+            <option value="">{t.form.chooseDestinationCountry}</option>
+            {destinationCountries.map((country) => (
+              <option key={country.code} value={country.code}>
+                {country[lang]}
+              </option>
+            ))}
+          </select>
+        </FormField>
         <FormField
           id="trackingNumber"
           label={t.form.trackingNumber}

@@ -31,7 +31,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <AuthProvider>
-      <div className="flex min-h-dvh">
+      <div className="flex min-h-dvh rtl:flex-row-reverse">
         <DashboardSidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <DashboardTopbar />

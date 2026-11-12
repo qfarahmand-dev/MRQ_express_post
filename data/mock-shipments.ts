@@ -5,6 +5,7 @@ type Step = [status: ShipmentStatus, isoDateTime: string, location: string, note
 interface Seed {
   id: string
   trackingNumber: string
+  destinationCountry: string
   sender: PartyInfo
   receiver: PartyInfo
   packageType: PackageType
@@ -26,6 +27,7 @@ function build(seed: Seed): Shipment {
   return {
     id: seed.id,
     trackingNumber: seed.trackingNumber,
+    destinationCountry: seed.destinationCountry,
     sender: seed.sender,
     receiver: seed.receiver,
     packageType: seed.packageType,
@@ -42,6 +44,7 @@ const seeds: Seed[] = [
   {
     id: 'shp_001',
     trackingNumber: 'MRQ240001845',
+    destinationCountry: 'DE',
     sender: { name: 'Ahmad Karimi', phone: '+93 70 123 4567', address: 'Shahr-e Naw, Street 4, Kabul, Afghanistan' },
     receiver: { name: 'Laila Noori', phone: '+49 151 2345 6789', address: 'Kaiserstraße 21, 60311 Frankfurt, Germany' },
     packageType: 'goods',
@@ -58,6 +61,7 @@ const seeds: Seed[] = [
   {
     id: 'shp_002',
     trackingNumber: 'MRQ240001846',
+    destinationCountry: 'GB',
     sender: { name: 'Fatima Hosseini', phone: '+98 912 345 6789', address: 'Valiasr St. 1203, Tehran, Iran' },
     receiver: { name: 'Omid Rezaei', phone: '+44 7700 900123', address: '14 Baker Street, London W1U 3BW, United Kingdom' },
     packageType: 'documents',
@@ -72,6 +76,7 @@ const seeds: Seed[] = [
   {
     id: 'shp_003',
     trackingNumber: 'MRQ240001847',
+    destinationCountry: 'AF',
     sender: { name: 'Javad Mohammadi', phone: '+971 50 123 4567', address: 'Al Quoz Industrial Area 3, Dubai, UAE' },
     receiver: { name: 'Nasrin Sadeghi', phone: '+93 79 876 5432', address: 'Karte Se, Street 7, Kabul, Afghanistan' },
     packageType: 'goods',
@@ -85,6 +90,7 @@ const seeds: Seed[] = [
   {
     id: 'shp_004',
     trackingNumber: 'MRQ240001848',
+    destinationCountry: 'IR',
     sender: { name: 'Zahra Akbari', phone: '+90 532 123 4567', address: 'İstiklal Cd. 45, Beyoğlu, Istanbul, Türkiye' },
     receiver: { name: 'Hamid Safavi', phone: '+98 935 222 1100', address: 'Imam Reza Blvd. 88, Mashhad, Iran' },
     packageType: 'goods',
@@ -94,6 +100,7 @@ const seeds: Seed[] = [
   {
     id: 'shp_005',
     trackingNumber: 'MRQ240001849',
+    destinationCountry: 'AF',
     sender: { name: 'Reza Ebrahimi', phone: '+49 160 555 0199', address: 'Torstraße 110, 10119 Berlin, Germany' },
     receiver: { name: 'Mina Jafari', phone: '+93 77 444 3322', address: 'Mazar Road, Herat, Afghanistan' },
     packageType: 'documents',
@@ -109,6 +116,7 @@ const seeds: Seed[] = [
   {
     id: 'shp_006',
     trackingNumber: 'MRQ240001850',
+    destinationCountry: 'IR',
     sender: { name: 'Parisa Nazari', phone: '+44 7911 123456', address: '22 Deansgate, Manchester M3 4LY, United Kingdom' },
     receiver: { name: 'Ali Moradi', phone: '+98 913 765 4321', address: 'Chaharbagh Ave. 15, Isfahan, Iran' },
     packageType: 'goods',
@@ -125,6 +133,7 @@ const seeds: Seed[] = [
   {
     id: 'shp_007',
     trackingNumber: 'MRQ240001851',
+    destinationCountry: 'TR',
     sender: { name: 'Hossein Amini', phone: '+93 78 111 2233', address: 'Jalalabad Road, Kabul, Afghanistan' },
     receiver: { name: 'Shirin Azizi', phone: '+90 541 998 7766', address: 'Atatürk Blvd. 120, Ankara, Türkiye' },
     packageType: 'goods',
@@ -137,6 +146,7 @@ const seeds: Seed[] = [
   {
     id: 'shp_008',
     trackingNumber: 'MRQ240001852',
+    destinationCountry: 'DE',
     sender: { name: 'Maryam Kazemi', phone: '+971 55 765 4321', address: 'Business Bay, Bay Square 6, Dubai, UAE' },
     receiver: { name: 'Karim Habibi', phone: '+49 176 1234 5678', address: 'Königsallee 60, 40212 Düsseldorf, Germany' },
     packageType: 'documents',
@@ -149,6 +159,7 @@ const seeds: Seed[] = [
   {
     id: 'shp_009',
     trackingNumber: 'MRQ240001853',
+    destinationCountry: 'AE',
     sender: { name: 'Nima Sharifi', phone: '+98 921 444 5566', address: 'Zand Blvd. 32, Shiraz, Iran' },
     receiver: { name: 'Elham Bagheri', phone: '+971 52 333 2211', address: 'Al Nahda 2, Sharjah, UAE' },
     packageType: 'goods',
@@ -164,6 +175,7 @@ const seeds: Seed[] = [
   {
     id: 'shp_010',
     trackingNumber: 'MRQ240001854',
+    destinationCountry: 'AF',
     sender: { name: 'Samira Rostami', phone: '+90 533 222 4455', address: 'Alsancak, Kıbrıs Şehitleri Cd. 9, Izmir, Türkiye' },
     receiver: { name: 'Farid Ghasemi', phone: '+93 70 555 6677', address: 'Pul-e Khishti, Kabul, Afghanistan' },
     packageType: 'goods',
@@ -177,6 +189,7 @@ const seeds: Seed[] = [
   {
     id: 'shp_011',
     trackingNumber: 'MRQ240001855',
+    destinationCountry: 'IR',
     sender: { name: 'Bahram Yousefi', phone: '+44 7400 112233', address: '5 Princes Street, Edinburgh EH2 2AN, United Kingdom' },
     receiver: { name: 'Roya Najafi', phone: '+98 914 321 0987', address: 'Shahnaz St. 41, Tabriz, Iran' },
     packageType: 'documents',
@@ -186,6 +199,7 @@ const seeds: Seed[] = [
   {
     id: 'shp_012',
     trackingNumber: 'MRQ240001856',
+    destinationCountry: 'AF',
     sender: { name: 'Kamran Haidari', phone: '+49 152 9876 5432', address: 'Mönckebergstraße 7, 20095 Hamburg, Germany' },
     receiver: { name: 'Sima Faizi', phone: '+93 79 222 8899', address: 'Kandahar City, District 3, Afghanistan' },
     packageType: 'goods',

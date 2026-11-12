@@ -5,7 +5,7 @@ import { TrackingSearchForm } from '@/components/tracking/tracking-search-form'
 import { useLanguage } from '@/contexts/language-context'
 import { interpolate } from '@/lib/format'
 
-export function TrackView({ number }: { number: string }) {
+export function TrackView({ number, resultPath = '/track' }: { number: string; resultPath?: string }) {
   const { t } = useLanguage()
 
   return (
@@ -14,7 +14,7 @@ export function TrackView({ number }: { number: string }) {
         <h1 className="text-3xl font-bold tracking-tight text-primary text-balance">{t.track.title}</h1>
         <p className="max-w-2xl text-muted-foreground text-pretty">{t.track.description}</p>
       </div>
-      <TrackingSearchForm key={number} defaultValue={number} className="max-w-2xl" />
+      <TrackingSearchForm key={number} defaultValue={number} className="max-w-2xl" resultPath={resultPath} />
       {number ? (
         <TrackingResult number={number} />
       ) : (

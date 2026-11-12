@@ -1,6 +1,6 @@
 'use client'
 
-import { CircleCheckBig, ClipboardList, Package, Truck } from 'lucide-react'
+import { CircleCheckBig, Package, Warehouse, Truck } from 'lucide-react'
 import { useLanguage } from '@/contexts/language-context'
 import { useShipmentStats } from '@/hooks/use-shipments'
 import { formatNumber } from '@/lib/format'
@@ -12,7 +12,7 @@ export function StatsCards() {
 
   const cards = [
     { label: t.dashboard.stats.total, value: data?.total, icon: Package, tone: 'bg-primary text-highlight' },
-    { label: t.dashboard.stats.registered, value: data?.registered, icon: ClipboardList, tone: 'bg-slate-100 text-slate-700' },
+    { label: t.dashboard.stats.inWarehouse, value: data?.inWarehouse, icon: Warehouse, tone: 'bg-slate-100 text-slate-700' },
     {
       label: t.dashboard.stats.inTransit,
       value: data?.inTransit,

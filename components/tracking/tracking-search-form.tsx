@@ -13,9 +13,10 @@ interface TrackingSearchFormProps {
   defaultValue?: string
   size?: 'default' | 'large'
   className?: string
+  resultPath?: string
 }
 
-export function TrackingSearchForm({ defaultValue = '', size = 'default', className }: TrackingSearchFormProps) {
+export function TrackingSearchForm({ defaultValue = '', size = 'default', className, resultPath = '/track' }: TrackingSearchFormProps) {
   const { t } = useLanguage()
   const router = useRouter()
   const [value, setValue] = useState(defaultValue)
@@ -29,7 +30,7 @@ export function TrackingSearchForm({ defaultValue = '', size = 'default', classN
       return
     }
     setError(false)
-    router.push(`/track?number=${encodeURIComponent(number)}`)
+    router.push(`${resultPath}?number=${encodeURIComponent(number)}`)
   }
 
   const large = size === 'large'

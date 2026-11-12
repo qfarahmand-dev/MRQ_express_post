@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, LogOut, Package, PackagePlus, UserRound } from 'lucide-react'
+import { FileChartColumnIncreasing, LayoutDashboard, LogOut, Package, PackagePlus, ScanSearch, UserRound } from 'lucide-react'
 import { Logo } from '@/components/common/logo'
 import { useLanguage } from '@/contexts/language-context'
 import { cn } from '@/lib/utils'
@@ -15,8 +15,10 @@ export function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 
   const items = [
     { href: '/dashboard', label: t.nav.dashboard, icon: LayoutDashboard, exact: true },
-    { href: '/dashboard/shipments', label: t.nav.shipments, icon: Package, exclude: '/dashboard/shipments/new' },
     { href: '/dashboard/shipments/new', label: t.nav.newShipment, icon: PackagePlus, exact: true },
+    { href: '/dashboard/shipments', label: t.nav.shipments, icon: Package, exclude: '/dashboard/shipments/new' },
+    { href: '/dashboard/tracking', label: t.nav.trackingNumber, icon: ScanSearch, exact: true },
+    { href: '/dashboard/reports', label: t.nav.reports, icon: FileChartColumnIncreasing, exact: true },
     { href: '/dashboard/profile', label: t.nav.profile, icon: UserRound, exact: true },
   ]
 

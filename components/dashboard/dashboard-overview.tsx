@@ -5,6 +5,7 @@ import { PackagePlus } from 'lucide-react'
 import { PageHeader } from '@/components/common/page-header'
 import { LatestUpdates } from '@/components/dashboard/latest-updates'
 import { RecentShipments } from '@/components/dashboard/recent-shipments'
+import { ShipmentReports } from '@/components/dashboard/shipment-reports'
 import { StatsCards } from '@/components/dashboard/stats-cards'
 import { buttonVariants } from '@/components/ui/button'
 import { useAuth } from '@/contexts/auth-context'
@@ -32,6 +33,7 @@ export function DashboardOverview() {
         }
       />
       <StatsCards />
+      <ShipmentReports compact />
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="min-w-0 xl:col-span-2">
           <RecentShipments />

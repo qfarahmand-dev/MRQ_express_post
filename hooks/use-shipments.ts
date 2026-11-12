@@ -15,6 +15,10 @@ export function useShipmentStats() {
   return useSWR(['shipments', 'stats'], () => shipmentService.getStats())
 }
 
+export function useShipmentReports() {
+  return useSWR(['shipments', 'reports'], () => shipmentService.getReports())
+}
+
 export function refreshShipments() {
   return mutate((key) => Array.isArray(key) && key[0] === 'shipments')
 }

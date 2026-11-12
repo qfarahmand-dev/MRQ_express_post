@@ -30,6 +30,7 @@ export interface Database {
         Row: {
           id: string
           tracking_number: string
+          destination_country: string
           sender_name: string
           sender_phone: string
           sender_address: string
@@ -47,6 +48,7 @@ export interface Database {
         Insert: {
           id?: string
           tracking_number: string
+          destination_country?: string
           sender_name: string
           sender_phone: string
           sender_address: string
@@ -64,6 +66,7 @@ export interface Database {
         Update: {
           id?: string
           tracking_number?: string
+          destination_country?: string
           sender_name?: string
           sender_phone?: string
           sender_address?: string
@@ -126,6 +129,7 @@ export interface Database {
           p_description: string
           p_registration_date: string
           p_status: ShipmentStatus
+          p_destination_country: string
         }
         Returns: string
       }
@@ -143,6 +147,7 @@ export interface Database {
           p_description: string
           p_registration_date: string
           p_status: ShipmentStatus
+          p_destination_country: string
         }
         Returns: string
       }
@@ -159,9 +164,18 @@ export interface Database {
         Args: Record<PropertyKey, never>
         Returns: {
           total: number
-          registered: number
+          in_warehouse: number
           in_transit: number
           delivered: number
+        }[]
+      }
+      get_shipment_reports: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          this_week: number
+          this_month: number
+          this_year: number
+          top_destinations: { country: string; total: number }[]
         }[]
       }
       track_shipment: {
