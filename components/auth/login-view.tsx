@@ -1,6 +1,8 @@
 'use client'
 
 import Image from 'next/image'
+import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { LoginForm } from '@/components/auth/login-form'
 import { LanguageSwitcher } from '@/components/common/language-switcher'
 import { Logo } from '@/components/common/logo'
@@ -24,7 +26,16 @@ export function LoginView() {
       <main className="flex flex-col">
         <div className="flex items-center justify-between p-4 sm:p-6">
           <Logo className="lg:invisible" />
-          <LanguageSwitcher />
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-primary"
+            >
+              <ArrowLeft className="size-4 rtl:rotate-180" aria-hidden="true" />
+              {t.login.backToWebsite}
+            </Link>
+            <LanguageSwitcher />
+          </div>
         </div>
         <div className="flex flex-1 items-center justify-center px-4 pb-12 sm:px-6">
           <div className="flex w-full max-w-sm flex-col gap-8">

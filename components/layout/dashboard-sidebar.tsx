@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { LayoutDashboard, LogOut, Package, PackagePlus, UserRound } from 'lucide-react'
 import { Logo } from '@/components/common/logo'
 import { useLanguage } from '@/contexts/language-context'
@@ -12,7 +12,6 @@ import { toast } from 'sonner'
 export function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
   const { t } = useLanguage()
   const pathname = usePathname()
-  const router = useRouter()
 
   const items = [
     { href: '/dashboard', label: t.nav.dashboard, icon: LayoutDashboard, exact: true },
@@ -25,7 +24,7 @@ export function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
     try {
       await authService.signOut()
       onNavigate?.()
-      router.push('/login')
+      window.location.replace('/login')
     } catch {
       toast.error(t.common.unexpectedError)
     }

@@ -85,6 +85,7 @@ const en = {
   login: {
     title: 'Sign in to your account',
     description: 'Sign in with the administrator account created in Supabase.',
+    backToWebsite: 'Back to website',
     email: 'Email',
     emailPlaceholder: 'you@mrqexpress.com',
     password: 'Password',
@@ -335,6 +336,7 @@ const fa: Dictionary = {
   login: {
     title: 'ورود به حساب کاربری',
     description: 'با حساب مدیریتی‌ای که در Supabase ساخته‌اید وارد شوید.',
+    backToWebsite: 'بازگشت به وب‌سایت',
     email: 'ایمیل',
     emailPlaceholder: 'you@mrqexpress.com',
     password: 'رمز عبور',

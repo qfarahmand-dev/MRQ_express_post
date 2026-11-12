@@ -1,7 +1,8 @@
 'use client'
 
-import { createContext, useCallback, useContext, useMemo } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo } from 'react'
 import useSWR from 'swr'
+import { getSupabaseClient } from '@/lib/supabase'
 import { authService } from '@/services/auth-service'
 import { ROLE_PERMISSIONS, type AppUser, type Permission, type ProfileUpdateInput } from '@/types/user'
 
@@ -15,6 +16,36 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { data: user, mutate } = useSWR('current-user', () => authService.getCurrentUser())
+
+  useEffect(() => {
+    const supabase = getSupabaseClient()
+    if (!supabase) return
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        void mutate(undefined, { revalidate: false })
+        window.location.replace('/login')
+      }
+    })
+
+    async function verifyRestoredPage() {
+      try {
+        await authService.getCurrentUser()
+      } catch {
+        window.location.replace('/login')
+      }
+    }
+
+    function handlePageShow(event: PageTransitionEvent) {
+      if (event.persisted) void verifyRestoredPage()
+    }
+
+    window.addEventListener('pageshow', handlePageShow)
+    return () => {
+      subscription.unsubscribe()
+      window.removeEventListener('pageshow', handlePageShow)
+    }
+  }, [mutate])
 
   const can = useCallback(
     (permission: Permission) => (user ? ROLE_PERMISSIONS[user.role].includes(permission) : false),
