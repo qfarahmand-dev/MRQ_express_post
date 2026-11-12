@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { LogIn, Mail, Menu, Phone } from 'lucide-react'
 import { Logo } from '@/components/common/logo'
 import { LanguageSwitcher } from '@/components/common/language-switcher'
+import { ThemeToggle } from '@/components/common/theme-toggle'
 import { buttonVariants } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { useLanguage } from '@/contexts/language-context'
@@ -61,6 +62,7 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-2">
           <LanguageSwitcher className="hidden sm:inline-flex" />
+          <ThemeToggle />
           <Link href="/track" className="hidden rounded-md px-2.5 py-2 text-sm font-medium text-muted-foreground transition hover:bg-secondary hover:text-primary lg:inline-flex">
             {t.nav.track}
           </Link>

@@ -31,7 +31,7 @@ export function ShipmentsList() {
     return (data ?? []).filter((s) => {
       if (status !== 'all' && s.status !== status) return false
       if (!q) return true
-      return [s.trackingNumber, s.sender.name, s.receiver.name].some((v) => v.toLowerCase().includes(q))
+      return [s.trackingNumber ?? '', s.sender.name, s.receiver.name].some((v) => v.toLowerCase().includes(q))
     })
   }, [data, query, status])
 

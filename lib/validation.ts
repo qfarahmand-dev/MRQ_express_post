@@ -2,7 +2,7 @@ import type { ShipmentInput } from '@/types/shipment'
 
 export const TRACKING_NUMBER_MAX_LENGTH = 25
 
-export type FieldErrorKey = 'required' | 'phone' | 'trackingLength' | 'trackingFormat'
+export type FieldErrorKey = 'required' | 'phone' | 'trackingLength' | 'trackingFormat' | 'positiveNumber' | 'photoType' | 'photoSize' | 'dateOrder'
 
 export type ShipmentFormErrors = Partial<Record<string, FieldErrorKey>>
 
@@ -33,6 +33,7 @@ export function validateShipmentInput(input: ShipmentInput): ShipmentFormErrors 
     ['receiver.name', input.receiver.name],
     ['receiver.address', input.receiver.address],
     ['registrationDate', input.registrationDate],
+    ['shippingCompany', input.shippingCompany],
   ]
   for (const [field, value] of requiredText) {
     if (!value.trim()) errors[field] = 'required'
@@ -46,7 +47,15 @@ export function validateShipmentInput(input: ShipmentInput): ShipmentFormErrors 
 
   const tracking = normalizeTrackingNumber(input.trackingNumber)
   if (tracking.length > TRACKING_NUMBER_MAX_LENGTH) errors.trackingNumber = 'trackingLength'
-  else if (tracking && !/^[A-Z0-9-]+$/.test(tracking)) errors.trackingNumber = 'trackingFormat'
+  else if (tracking && !/^[A-Z0-9]+$/.test(tracking)) errors.trackingNumber = 'trackingFormat'
+
+  if (!Number.isFinite(input.weightKg) || input.weightKg <= 0) errors.weightKg = 'positiveNumber'
+  for (const [dimension, value] of Object.entries(input.dimensionsCm)) {
+    if (value !== null && (!Number.isFinite(value) || value <= 0)) errors[`dimensionsCm.${dimension}`] = 'positiveNumber'
+  }
+  if (input.receivedDate && input.registrationDate && input.receivedDate < input.registrationDate) {
+    errors.receivedDate = 'dateOrder'
+  }
 
   return errors
 }

@@ -21,7 +21,7 @@ export function EditShipmentView({ id }: { id: string }) {
     <>
       <PageHeader
         title={t.shipments.editTitle}
-        description={interpolate(t.shipments.editDescription, { number: shipment.trackingNumber })}
+        description={interpolate(t.shipments.editDescription, { number: shipment.trackingNumber || t.shipments.notAssigned })}
       />
       <ShipmentForm key={shipment.id} shipment={shipment} />
     </>

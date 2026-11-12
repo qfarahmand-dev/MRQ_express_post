@@ -10,5 +10,5 @@ export default async function DashboardTrackingPage({
 }) {
   const { number } = await searchParams
   const value = (Array.isArray(number) ? number[0] : number)?.trim().toUpperCase() ?? ''
-  return <TrackView number={value} resultPath="/dashboard/tracking" />
+  return <TrackView number={value} resultPath="/dashboard/tracking" includeCarrierTracking />
 }

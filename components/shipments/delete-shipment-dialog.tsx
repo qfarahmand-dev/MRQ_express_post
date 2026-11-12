@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/contexts/language-context'
 import { refreshShipments } from '@/hooks/use-shipments'
 import { interpolate } from '@/lib/format'
-import { shipmentService } from '@/services/shipment-service'
+import { shipmentService, ShipmentServiceError } from '@/services/shipment-service'
 import type { Shipment } from '@/types/shipment'
 
 interface DeleteShipmentDialogProps {
@@ -37,8 +37,15 @@ export function DeleteShipmentDialog({ shipment, onOpenChange, onDeleted }: Dele
       onOpenChange(false)
       onDeleted?.()
       await refreshShipments()
-    } catch {
-      toast.error(t.common.unexpectedError)
+    } catch (error) {
+      if (error instanceof ShipmentServiceError && error.code === 'photo_cleanup_failed') {
+        toast.error(t.shipments.photoCleanupError)
+        onOpenChange(false)
+        onDeleted?.()
+        await refreshShipments()
+      } else {
+        toast.error(t.common.unexpectedError)
+      }
     } finally {
       setDeleting(false)
     }
@@ -50,7 +57,7 @@ export function DeleteShipmentDialog({ shipment, onOpenChange, onDeleted }: Dele
         <AlertDialogHeader>
           <AlertDialogTitle>{t.shipments.deleteTitle}</AlertDialogTitle>
           <AlertDialogDescription>
-            {interpolate(t.shipments.deleteDescription, { number: shipment?.trackingNumber ?? '' })}
+            {interpolate(t.shipments.deleteDescription, { number: shipment?.trackingNumber || t.shipments.notAssigned })}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

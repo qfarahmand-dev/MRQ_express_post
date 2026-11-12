@@ -5,6 +5,7 @@ import type {
   Shipment,
   ShipmentInput,
   ShipmentReports,
+  ShipmentPhotoKind,
   ShipmentStats,
   StatusUpdateInput,
 } from '@/types/shipment'
@@ -14,7 +15,16 @@ type ShipmentRow = Database['public']['Tables']['shipments']['Row']
 type EventRow = Database['public']['Tables']['shipment_events']['Row']
 
 export class ShipmentServiceError extends Error {
-  constructor(public code: 'not_found' | 'tracking_taken' | 'not_configured' | 'request_failed', message?: string) {
+  constructor(
+    public code:
+      | 'not_found'
+      | 'tracking_taken'
+      | 'not_configured'
+      | 'request_failed'
+      | 'photo_upload_failed'
+      | 'photo_cleanup_failed',
+    message?: string,
+  ) {
     super(message ?? code)
     this.name = 'ShipmentServiceError'
   }
@@ -68,6 +78,12 @@ function mapShipment(row: ShipmentRow, events: ReturnType<typeof mapEvent>[]): S
     sender: { name: row.sender_name, phone: row.sender_phone, address: row.sender_address },
     receiver: { name: row.receiver_name, phone: row.receiver_phone, address: row.receiver_address },
     packageType: row.package_type,
+    weightKg: Number(row.weight_kg),
+    dimensionsCm: { length: row.length_cm === null ? null : Number(row.length_cm), width: row.width_cm === null ? null : Number(row.width_cm), height: row.height_cm === null ? null : Number(row.height_cm) },
+    shippingCompany: row.shipping_company,
+    receivedDate: row.received_date,
+    senderIdPhotoPath: row.sender_id_photo_path,
+    receiverHomePhotoPath: row.receiver_home_photo_path,
     description: row.description,
     registrationDate: row.registration_date,
     status: row.status,
@@ -98,6 +114,7 @@ async function loadEvents(shipmentIds: string[]) {
 
 function shipmentArgs(input: ShipmentInput) {
   const clean = sanitize(input)
+  if (!clean.shippingCompany) throw new ShipmentServiceError('request_failed', 'A shipping company must be selected')
   return {
     p_tracking_number: clean.trackingNumber,
     p_destination_country: clean.destinationCountry,
@@ -111,7 +128,21 @@ function shipmentArgs(input: ShipmentInput) {
     p_description: clean.description,
     p_registration_date: clean.registrationDate,
     p_status: clean.status,
+    p_weight_kg: clean.weightKg,
+    p_length_cm: clean.dimensionsCm.length,
+    p_width_cm: clean.dimensionsCm.width,
+    p_height_cm: clean.dimensionsCm.height,
+    p_shipping_company: clean.shippingCompany,
+    p_received_date: clean.receivedDate || null,
   }
+}
+
+const PHOTO_BUCKET = 'shipment-private'
+const PHOTO_LIMIT_BYTES = 5 * 1024 * 1024
+const PHOTO_EXTENSIONS: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
 }
 
 export const shipmentService = {
@@ -148,7 +179,7 @@ export const shipmentService = {
     if (!row) return null
 
     return {
-      trackingNumber: row.tracking_number,
+      trackingNumber: row.tracking_number ?? normalizeTrackingNumber(trackingNumber),
       senderName: row.sender_name,
       receiverName: row.receiver_name,
       packageType: row.package_type,
@@ -204,6 +235,15 @@ export const shipmentService = {
   },
 
   async remove(id: string): Promise<void> {
+    const client = getClient()
+    const { data: photos, error: photoQueryError } = await client
+      .from('shipments')
+      .select('sender_id_photo_path, receiver_home_photo_path')
+      .eq('id', id)
+      .maybeSingle()
+    if (photoQueryError) throwDatabaseError(photoQueryError)
+    if (!photos) throw new ShipmentServiceError('not_found')
+
     const { data, error } = await getClient()
       .from('shipments')
       .delete()
@@ -212,6 +252,68 @@ export const shipmentService = {
       .maybeSingle()
     if (error) throwDatabaseError(error)
     if (!data) throw new ShipmentServiceError('not_found')
+
+    const paths = [photos.sender_id_photo_path, photos.receiver_home_photo_path].filter((path): path is string => Boolean(path))
+    if (paths.length) {
+      const { error: cleanupError } = await client.storage.from(PHOTO_BUCKET).remove(paths)
+      if (cleanupError) throw new ShipmentServiceError('photo_cleanup_failed', cleanupError.message)
+    }
+  },
+
+  async uploadPhoto(id: string, kind: ShipmentPhotoKind, file: File): Promise<void> {
+    const extension = PHOTO_EXTENSIONS[file.type]
+    if (!extension || file.size <= 0 || file.size > PHOTO_LIMIT_BYTES) {
+      throw new ShipmentServiceError('photo_upload_failed', 'The selected image is not an allowed type or size')
+    }
+
+    const client = getClient()
+    const { data: shipment, error: lookupError } = await client
+      .from('shipments')
+      .select('sender_id_photo_path, receiver_home_photo_path')
+      .eq('id', id)
+      .maybeSingle()
+    if (lookupError) throwDatabaseError(lookupError)
+    if (!shipment) throw new ShipmentServiceError('not_found')
+
+    const previousPath = kind === 'sender-id' ? shipment.sender_id_photo_path : shipment.receiver_home_photo_path
+    const path = `${id}/${kind}/${crypto.randomUUID()}.${extension}`
+    const { error: uploadError } = await client.storage.from(PHOTO_BUCKET).upload(path, file, {
+      contentType: file.type,
+      upsert: false,
+    })
+    if (uploadError) throw new ShipmentServiceError('photo_upload_failed', uploadError.message)
+
+    const { data: updated, error: updateError } = await client
+      .from('shipments')
+      .update(kind === 'sender-id' ? { sender_id_photo_path: path } : { receiver_home_photo_path: path })
+      .eq('id', id)
+      .select('id')
+      .maybeSingle()
+    if (updateError) {
+      const { error: cleanupError } = await client.storage.from(PHOTO_BUCKET).remove([path])
+      if (cleanupError) {
+        throw new ShipmentServiceError('photo_upload_failed', `${updateError.message}; uploaded file cleanup failed: ${cleanupError.message}`)
+      }
+      throwDatabaseError(updateError)
+    }
+    if (!updated) {
+      const { error: cleanupError } = await client.storage.from(PHOTO_BUCKET).remove([path])
+      if (cleanupError) {
+        throw new ShipmentServiceError('photo_upload_failed', `Shipment was not updated; uploaded file cleanup failed: ${cleanupError.message}`)
+      }
+      throw new ShipmentServiceError('not_found')
+    }
+
+    if (previousPath) {
+      const { error: cleanupError } = await client.storage.from(PHOTO_BUCKET).remove([previousPath])
+      if (cleanupError) throw new ShipmentServiceError('photo_cleanup_failed', cleanupError.message)
+    }
+  },
+
+  async getPrivatePhotoUrl(path: string): Promise<string> {
+    const { data, error } = await getClient().storage.from(PHOTO_BUCKET).createSignedUrl(path, 300)
+    if (error) throw new ShipmentServiceError('request_failed', error.message)
+    return data.signedUrl
   },
 
   async getStats(): Promise<ShipmentStats> {

@@ -1,4 +1,4 @@
-import type { PackageType, ShipmentStatus } from '@/types/shipment'
+import type { PackageType, ShipmentStatus, ShippingCompany } from '@/types/shipment'
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
@@ -29,8 +29,16 @@ export interface Database {
       shipments: {
         Row: {
           id: string
-          tracking_number: string
+          tracking_number: string | null
           destination_country: string
+          weight_kg: number
+          length_cm: number | null
+          width_cm: number | null
+          height_cm: number | null
+          shipping_company: ShippingCompany | null
+          received_date: string | null
+          sender_id_photo_path: string | null
+          receiver_home_photo_path: string | null
           sender_name: string
           sender_phone: string
           sender_address: string
@@ -47,8 +55,16 @@ export interface Database {
         }
         Insert: {
           id?: string
-          tracking_number: string
+          tracking_number: string | null
           destination_country?: string
+          weight_kg?: number
+          length_cm?: number | null
+          width_cm?: number | null
+          height_cm?: number | null
+          shipping_company?: ShippingCompany | null
+          received_date?: string | null
+          sender_id_photo_path?: string | null
+          receiver_home_photo_path?: string | null
           sender_name: string
           sender_phone: string
           sender_address: string
@@ -65,8 +81,16 @@ export interface Database {
         }
         Update: {
           id?: string
-          tracking_number?: string
+          tracking_number?: string | null
           destination_country?: string
+          weight_kg?: number
+          length_cm?: number | null
+          width_cm?: number | null
+          height_cm?: number | null
+          shipping_company?: ShippingCompany | null
+          received_date?: string | null
+          sender_id_photo_path?: string | null
+          receiver_home_photo_path?: string | null
           sender_name?: string
           sender_phone?: string
           sender_address?: string
@@ -130,6 +154,12 @@ export interface Database {
           p_registration_date: string
           p_status: ShipmentStatus
           p_destination_country: string
+          p_weight_kg: number
+          p_length_cm: number | null
+          p_width_cm: number | null
+          p_height_cm: number | null
+          p_shipping_company: ShippingCompany
+          p_received_date: string | null
         }
         Returns: string
       }
@@ -148,6 +178,12 @@ export interface Database {
           p_registration_date: string
           p_status: ShipmentStatus
           p_destination_country: string
+          p_weight_kg: number
+          p_length_cm: number | null
+          p_width_cm: number | null
+          p_height_cm: number | null
+          p_shipping_company: ShippingCompany
+          p_received_date: string | null
         }
         Returns: string
       }
@@ -181,7 +217,7 @@ export interface Database {
       track_shipment: {
         Args: { p_tracking_number: string }
         Returns: {
-          tracking_number: string
+          tracking_number: string | null
           sender_name: string
           receiver_name: string
           package_type: PackageType
@@ -202,6 +238,7 @@ export interface Database {
       app_role: 'admin'
       shipment_status: ShipmentStatus
       package_type: PackageType
+      shipping_company: ShippingCompany
     }
     CompositeTypes: Record<string, never>
   }

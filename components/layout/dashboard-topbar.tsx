@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Menu } from 'lucide-react'
 import { LanguageSwitcher } from '@/components/common/language-switcher'
+import { ThemeToggle } from '@/components/common/theme-toggle'
 import { DashboardNav } from '@/components/layout/dashboard-sidebar'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { buttonVariants } from '@/components/ui/button'
@@ -37,6 +38,7 @@ export function DashboardTopbar() {
 
       <div className="flex items-center gap-3">
         <LanguageSwitcher />
+        <ThemeToggle />
         {user && (
           <Link
             href="/dashboard/profile"

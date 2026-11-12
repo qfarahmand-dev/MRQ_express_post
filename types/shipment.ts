@@ -16,6 +16,10 @@ export const PACKAGE_TYPES = ['documents', 'goods'] as const
 
 export type PackageType = (typeof PACKAGE_TYPES)[number]
 
+export const SHIPPING_COMPANIES = ['UPS', 'DHL', 'DPD'] as const
+
+export type ShippingCompany = (typeof SHIPPING_COMPANIES)[number]
+
 export interface PartyInfo {
   name: string
   phone: string
@@ -33,11 +37,17 @@ export interface ShipmentEvent {
 
 export interface Shipment {
   id: string
-  trackingNumber: string
+  trackingNumber: string | null
   destinationCountry: string
   sender: PartyInfo
   receiver: PartyInfo
   packageType: PackageType
+  weightKg: number
+  dimensionsCm: { length: number | null; width: number | null; height: number | null }
+  shippingCompany: ShippingCompany | null
+  receivedDate: string | null
+  senderIdPhotoPath: string | null
+  receiverHomePhotoPath: string | null
   description: string
   registrationDate: string
   status: ShipmentStatus
@@ -52,6 +62,10 @@ export interface ShipmentInput {
   sender: PartyInfo
   receiver: PartyInfo
   packageType: PackageType
+  weightKg: number
+  dimensionsCm: { length: number | null; width: number | null; height: number | null }
+  shippingCompany: ShippingCompany | ''
+  receivedDate: string
   description: string
   registrationDate: string
   status: ShipmentStatus
@@ -88,3 +102,5 @@ export interface ShipmentReports {
   thisYear: number
   topDestinations: { country: string; total: number }[]
 }
+
+export type ShipmentPhotoKind = 'sender-id' | 'receiver-home'

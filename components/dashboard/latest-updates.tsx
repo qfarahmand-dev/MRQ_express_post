@@ -36,7 +36,7 @@ export function LatestUpdates() {
                     dir="ltr"
                     className="font-mono text-sm font-semibold text-primary hover:underline"
                   >
-                    {update.shipment.trackingNumber}
+                    {update.shipment.trackingNumber || t.form.noTrackingNumber}
                   </Link>
                   <StatusBadge status={update.status} />
                 </div>

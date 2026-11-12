@@ -2,10 +2,11 @@
 
 import { TrackingResult } from '@/components/tracking/tracking-result'
 import { TrackingSearchForm } from '@/components/tracking/tracking-search-form'
+import { CarrierTrackingLinks } from '@/components/tracking/carrier-tracking-links'
 import { useLanguage } from '@/contexts/language-context'
 import { interpolate } from '@/lib/format'
 
-export function TrackView({ number, resultPath = '/track' }: { number: string; resultPath?: string }) {
+export function TrackView({ number, resultPath = '/track', includeCarrierTracking = false }: { number: string; resultPath?: string; includeCarrierTracking?: boolean }) {
   const { t } = useLanguage()
 
   return (
@@ -22,6 +23,7 @@ export function TrackView({ number, resultPath = '/track' }: { number: string; r
           {interpolate(t.home.trackHint, { example: 'MRQ240001846' })}
         </p>
       )}
+      {includeCarrierTracking && <CarrierTrackingLinks />}
     </div>
   )
 }

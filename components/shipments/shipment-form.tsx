@@ -18,7 +18,7 @@ import { interpolate, todayISODate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { TRACKING_NUMBER_MAX_LENGTH, validateShipmentInput, type ShipmentFormErrors } from '@/lib/validation'
 import { shipmentService, ShipmentServiceError } from '@/services/shipment-service'
-import { PACKAGE_TYPES, type Shipment, type ShipmentInput } from '@/types/shipment'
+import { PACKAGE_TYPES, SHIPPING_COMPANIES, type Shipment, type ShipmentInput, type ShipmentPhotoKind } from '@/types/shipment'
 
 const emptyInput = (): ShipmentInput => ({
   trackingNumber: '',
@@ -26,17 +26,25 @@ const emptyInput = (): ShipmentInput => ({
   sender: { name: '', phone: '', address: '' },
   receiver: { name: '', phone: '', address: '' },
   packageType: 'goods',
+  weightKg: 0,
+  dimensionsCm: { length: null, width: null, height: null },
+  shippingCompany: '',
+  receivedDate: '',
   description: '',
   registrationDate: todayISODate(),
   status: 'registered',
 })
 
 const toInput = (s: Shipment): ShipmentInput => ({
-  trackingNumber: s.trackingNumber,
+  trackingNumber: s.trackingNumber ?? '',
   destinationCountry: s.destinationCountry,
   sender: { ...s.sender },
   receiver: { ...s.receiver },
   packageType: s.packageType,
+  weightKg: s.weightKg,
+  dimensionsCm: { ...s.dimensionsCm },
+  shippingCompany: s.shippingCompany ?? '',
+  receivedDate: s.receivedDate ?? '',
   description: s.description,
   registrationDate: s.registrationDate,
   status: s.status,
@@ -67,6 +75,8 @@ export function ShipmentForm({ shipment }: { shipment?: Shipment }) {
   const [values, setValues] = useState<ShipmentInput>(() => (shipment ? toInput(shipment) : emptyInput()))
   const [errors, setErrors] = useState<ShipmentFormErrors>({})
   const [trackingTaken, setTrackingTaken] = useState(false)
+  const [senderIdPhoto, setSenderIdPhoto] = useState<File | null>(null)
+  const [receiverHomePhoto, setReceiverHomePhoto] = useState<File | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const errorText = (field: string) => {
@@ -91,31 +101,66 @@ export function ShipmentForm({ shipment }: { shipment?: Shipment }) {
     if (key === 'trackingNumber') setTrackingTaken(false)
   }
 
+  function setDimension(key: 'length' | 'width' | 'height', value: string) {
+    setValues((current) => ({
+      ...current,
+      dimensionsCm: { ...current.dimensionsCm, [key]: value ? Number(value) : null },
+    }))
+    setErrors((current) => ({ ...current, [`dimensionsCm.${key}`]: undefined }))
+  }
+
+  function selectedPhotoError(file: File | null, field: string): string | undefined {
+    if (!file) return undefined
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return `${field}:photoType`
+    if (file.size <= 0 || file.size > 5 * 1024 * 1024) return `${field}:photoSize`
+    return undefined
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const nextErrors = validateShipmentInput(values)
+    const senderPhotoError = selectedPhotoError(senderIdPhoto, 'senderIdPhoto')
+    const receiverPhotoError = selectedPhotoError(receiverHomePhoto, 'receiverHomePhoto')
+    for (const photoError of [senderPhotoError, receiverPhotoError]) {
+      if (photoError) {
+        const [field, key] = photoError.split(':')
+        nextErrors[field] = key as 'photoType' | 'photoSize'
+      }
+    }
     setErrors(nextErrors)
     const firstInvalid = Object.keys(nextErrors)[0]
     if (firstInvalid) {
       toast.error(t.form.errors.fixErrors)
-      document.getElementById(firstInvalid.replace('.', '-'))?.focus()
+      const focusId = firstInvalid.startsWith('dimensionsCm.')
+        ? `dimensions-${firstInvalid.slice('dimensionsCm.'.length)}`
+        : firstInvalid.replace('.', '-')
+      document.getElementById(focusId)?.focus()
       return
     }
     if (!user) return
 
     setSubmitting(true)
     try {
-      if (shipment) {
-        await shipmentService.update(shipment.id, values, user.id)
+      const saved = shipment
+        ? await shipmentService.update(shipment.id, values, user.id)
+        : await shipmentService.create(values, user.id)
+      try {
+        if (senderIdPhoto) await shipmentService.uploadPhoto(saved.id, 'sender-id', senderIdPhoto)
+        if (receiverHomePhoto) await shipmentService.uploadPhoto(saved.id, 'receiver-home', receiverHomePhoto)
+      } catch (photoError) {
         await refreshShipments()
-        toast.success(t.shipments.updated)
-        router.push(`/dashboard/shipments/${shipment.id}`)
-      } else {
-        const created = await shipmentService.create(values, user.id)
-        await refreshShipments()
-        toast.success(interpolate(t.shipments.created, { number: created.trackingNumber }))
-        router.push(`/dashboard/shipments/${created.id}`)
+        toast.error(
+          photoError instanceof ShipmentServiceError && photoError.code === 'photo_cleanup_failed'
+            ? t.shipments.photoCleanupError
+            : t.shipments.photoUploadError,
+        )
+        router.push(`/dashboard/shipments/${saved.id}`)
+        return
       }
+      await refreshShipments()
+      if (shipment) toast.success(t.shipments.updated)
+      else toast.success(interpolate(t.shipments.created, { number: saved.trackingNumber || t.shipments.notAssigned }))
+      router.push(`/dashboard/shipments/${saved.id}`)
     } catch (error) {
       if (error instanceof ShipmentServiceError && error.code === 'tracking_taken') {
         setTrackingTaken(true)
@@ -123,8 +168,41 @@ export function ShipmentForm({ shipment }: { shipment?: Shipment }) {
       } else {
         toast.error(t.common.unexpectedError)
       }
+    } finally {
       setSubmitting(false)
     }
+  }
+
+  const photoField = (kind: ShipmentPhotoKind) => {
+    const isSender = kind === 'sender-id'
+    const field = isSender ? 'senderIdPhoto' : 'receiverHomePhoto'
+    const currentPath = isSender ? shipment?.senderIdPhotoPath : shipment?.receiverHomePhotoPath
+    const file = isSender ? senderIdPhoto : receiverHomePhoto
+    const setter = isSender ? setSenderIdPhoto : setReceiverHomePhoto
+    const id = isSender ? 'senderIdPhoto' : 'receiverHomePhoto'
+    return (
+      <FormField
+        id={id}
+        label={isSender ? t.form.senderPhoto : t.form.receiverPhoto}
+        optionalLabel={t.common.optional}
+        hint={isSender ? t.form.senderPhotoHint : t.form.receiverPhotoHint}
+        error={errorText(field)}
+        className="sm:col-span-2"
+      >
+        <Input
+          id={id}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={(event) => {
+            setter(event.target.files?.[0] ?? null)
+            setErrors((current) => ({ ...current, [field]: undefined }))
+          }}
+          className="h-10 file:me-3 file:h-8 file:border-0 file:bg-transparent file:text-sm file:font-medium"
+          {...ariaFor(field, id)}
+        />
+        {currentPath && !file && <p className="text-xs text-muted-foreground">{t.form.existingPhoto}</p>}
+      </FormField>
+    )
   }
 
   const partyFields = (party: 'sender' | 'receiver') => (
@@ -169,10 +247,12 @@ export function ShipmentForm({ shipment }: { shipment?: Shipment }) {
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
       <FormSection icon={UserRound} title={t.form.senderSection} hint={t.form.senderHint}>
         {partyFields('sender')}
+        {photoField('sender-id')}
       </FormSection>
 
       <FormSection icon={UserRoundCheck} title={t.form.receiverSection} hint={t.form.receiverHint}>
         {partyFields('receiver')}
+        {photoField('receiver-home')}
       </FormSection>
 
       <FormSection icon={Package} title={t.form.packageSection} hint={t.form.packageHint}>
@@ -212,6 +292,53 @@ export function ShipmentForm({ shipment }: { shipment?: Shipment }) {
             {...ariaFor('trackingNumber', 'trackingNumber')}
           />
         </FormField>
+
+        <FormField id="shippingCompany" label={t.form.shippingCompany} required error={errorText('shippingCompany')}>
+          <select
+            id="shippingCompany"
+            value={values.shippingCompany}
+            onChange={(event) => setField('shippingCompany', event.target.value as ShipmentInput['shippingCompany'])}
+            aria-invalid={Boolean(errorText('shippingCompany')) || undefined}
+            className={`h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${errorText('shippingCompany') ? 'border-destructive' : 'border-input'}`}
+          >
+            <option value="">{t.form.chooseShippingCompany}</option>
+            {SHIPPING_COMPANIES.map((company) => <option key={company} value={company}>{company}</option>)}
+          </select>
+        </FormField>
+        <FormField id="weightKg" label={t.form.weightKg} required error={errorText('weightKg')}>
+          <Input
+            id="weightKg"
+            type="number"
+            min="0.001"
+            step="any"
+            value={values.weightKg || ''}
+            onChange={(event) => setField('weightKg', Number(event.target.value) || 0)}
+            className="h-10"
+            {...ariaFor('weightKg', 'weightKg')}
+          />
+        </FormField>
+
+        <fieldset className="grid gap-3 sm:col-span-2 sm:grid-cols-3">
+          <legend className="mb-1.5 text-sm font-medium">{t.form.dimensions} <span className="text-xs font-normal text-muted-foreground">({t.common.optional})</span></legend>
+          {(['length', 'width', 'height'] as const).map((dimension) => {
+            const id = `dimensions-${dimension}`
+            const field = `dimensionsCm.${dimension}`
+            return (
+              <FormField key={dimension} id={id} label={t.form[dimension]} error={errorText(field)}>
+                <Input
+                  id={id}
+                  type="number"
+                  min="0.001"
+                  step="any"
+                  value={values.dimensionsCm[dimension] ?? ''}
+                  onChange={(event) => setDimension(dimension, event.target.value)}
+                  className="h-10"
+                  {...ariaFor(field, id)}
+                />
+              </FormField>
+            )
+          })}
+        </fieldset>
 
         <fieldset className="flex flex-col gap-1.5">
           <legend className="mb-1.5 text-sm font-medium">
@@ -256,6 +383,18 @@ export function ShipmentForm({ shipment }: { shipment?: Shipment }) {
             onChange={(e) => setField('registrationDate', e.target.value)}
             className="h-10"
             {...ariaFor('registrationDate', 'registrationDate')}
+          />
+        </FormField>
+
+        <FormField id="receivedDate" label={t.form.receivedDate} optionalLabel={t.common.optional} error={errorText('receivedDate')}>
+          <Input
+            id="receivedDate"
+            type="date"
+            min={values.registrationDate || undefined}
+            value={values.receivedDate}
+            onChange={(event) => setField('receivedDate', event.target.value)}
+            className="h-10"
+            {...ariaFor('receivedDate', 'receivedDate')}
           />
         </FormField>
 

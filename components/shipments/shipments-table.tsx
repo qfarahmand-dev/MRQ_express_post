@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useAuth } from '@/contexts/auth-context'
 import { useLanguage } from '@/contexts/language-context'
 import { formatDate, interpolate } from '@/lib/format'
+import { destinationCountries } from '@/lib/countries'
 import { cn } from '@/lib/utils'
 import type { Shipment } from '@/types/shipment'
 
@@ -31,7 +32,8 @@ export function ShipmentsTable({ shipments, loading, compact, emptyMessage, onDe
   const { t, lang } = useLanguage()
   const { can } = useAuth()
   const router = useRouter()
-  const columnCount = compact ? 4 : 7
+  const columnCount = compact ? 4 : 14
+  const number = (value: number | null) => value === null ? t.shipments.notAssigned : new Intl.NumberFormat(lang).format(value)
 
   return (
     <Table>
@@ -39,10 +41,17 @@ export function ShipmentsTable({ shipments, loading, compact, emptyMessage, onDe
         <TableRow className="bg-muted/60 hover:bg-muted/60">
           <TableHead className="text-start">{t.shipments.columns.tracking}</TableHead>
           {!compact && <TableHead className="text-start">{t.shipments.columns.sender}</TableHead>}
+          {!compact && <TableHead className="text-start">{t.shipments.columns.senderPhoto}</TableHead>}
           <TableHead className="text-start">{t.shipments.columns.receiver}</TableHead>
+          {!compact && <TableHead className="text-start">{t.shipments.columns.receiverPhoto}</TableHead>}
+          {!compact && <TableHead className="text-start">{t.shipments.columns.destination}</TableHead>}
+          {!compact && <TableHead className="text-start">{t.shipments.columns.weight}</TableHead>}
+          {!compact && <TableHead className="text-start">{t.shipments.columns.dimensions}</TableHead>}
+          {!compact && <TableHead className="text-start">{t.shipments.columns.carrier}</TableHead>}
           {!compact && <TableHead className="text-start">{t.shipments.columns.packageType}</TableHead>}
           <TableHead className="text-start">{t.shipments.columns.status}</TableHead>
           <TableHead className="text-start">{t.shipments.columns.date}</TableHead>
+          {!compact && <TableHead className="text-start">{t.shipments.columns.receivedDate}</TableHead>}
           {!compact && (
             <TableHead className="text-end">
               <span className="sr-only">{t.shipments.columns.actions}</span>
@@ -73,26 +82,70 @@ export function ShipmentsTable({ shipments, loading, compact, emptyMessage, onDe
                 <Link
                   href={`/dashboard/shipments/${shipment.id}`}
                   dir="ltr"
-                  className="font-mono text-sm font-semibold text-primary hover:underline"
+                  className={cn('font-mono text-sm font-semibold hover:underline', shipment.trackingNumber ? 'text-primary' : 'text-muted-foreground')}
                 >
-                  {shipment.trackingNumber}
+                  {shipment.trackingNumber || t.form.noTrackingNumber}
                 </Link>
               </TableCell>
-              {!compact && <TableCell className="text-start">{shipment.sender.name}</TableCell>}
-              <TableCell className="text-start">{shipment.receiver.name}</TableCell>
               {!compact && (
-                <TableCell className="text-start text-muted-foreground">{t.packageTypes[shipment.packageType]}</TableCell>
+                <TableCell className="max-w-64 text-start">
+                  <p className="font-medium">{shipment.sender.name}</p>
+                  <p dir="ltr" className="text-xs text-muted-foreground">{shipment.sender.phone}</p>
+                  <p className="whitespace-normal text-xs text-muted-foreground">{shipment.sender.address}</p>
+                </TableCell>
+              )}
+              {!compact && (
+                <TableCell className="text-start">
+                  {shipment.senderIdPhotoPath ? (
+                    <Link href={`/dashboard/shipments/${shipment.id}`} className="text-primary hover:underline">{t.shipments.photoAttached}</Link>
+                  ) : t.shipments.noPhoto}
+                </TableCell>
+              )}
+              <TableCell className="max-w-64 text-start">
+                <p className="font-medium">{shipment.receiver.name}</p>
+                {!compact && (
+                  <>
+                    <p dir="ltr" className="text-xs text-muted-foreground">{shipment.receiver.phone}</p>
+                    <p className="whitespace-normal text-xs text-muted-foreground">{shipment.receiver.address}</p>
+                  </>
+                )}
+              </TableCell>
+              {!compact && (
+                <>
+                  <TableCell className="text-start">
+                    {shipment.receiverHomePhotoPath ? (
+                      <Link href={`/dashboard/shipments/${shipment.id}`} className="text-primary hover:underline">{t.shipments.photoAttached}</Link>
+                    ) : t.shipments.noPhoto}
+                  </TableCell>
+                  <TableCell className="text-start">
+                    {destinationCountries.find((country) => country.code === shipment.destinationCountry)?.[lang] || shipment.destinationCountry || t.shipments.notAssigned}
+                  </TableCell>
+                  <TableCell className="text-start">{shipment.weightKg > 0 ? `${number(shipment.weightKg)} kg` : t.shipments.notAssigned}</TableCell>
+                  <TableCell dir="ltr" className="text-start">
+                    {([shipment.dimensionsCm.length, shipment.dimensionsCm.width, shipment.dimensionsCm.height].some((value) => value !== null))
+                      ? [shipment.dimensionsCm.length, shipment.dimensionsCm.width, shipment.dimensionsCm.height].map(number).join(' × ')
+                      : t.shipments.notAssigned}
+                  </TableCell>
+                  <TableCell className="text-start">{shipment.shippingCompany ?? t.shipments.notAssigned}</TableCell>
+                </>
+              )}
+              {!compact && (
+                <TableCell className="max-w-56 text-start">
+                  <p>{t.packageTypes[shipment.packageType]}</p>
+                  {shipment.description && <p className="whitespace-normal text-xs text-muted-foreground">{shipment.description}</p>}
+                </TableCell>
               )}
               <TableCell className="text-start">
                 <StatusBadge status={shipment.status} />
               </TableCell>
               <TableCell className="text-start text-muted-foreground">{formatDate(shipment.registrationDate, lang)}</TableCell>
+              {!compact && <TableCell className="text-start text-muted-foreground">{shipment.receivedDate ? formatDate(shipment.receivedDate, lang) : t.shipments.notAssigned}</TableCell>}
               {!compact && (
                 <TableCell className="text-end">
                   <DropdownMenu>
                     <DropdownMenuTrigger
                       className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }))}
-                      aria-label={interpolate(t.shipments.openActions, { number: shipment.trackingNumber })}
+                      aria-label={interpolate(t.shipments.openActions, { number: shipment.trackingNumber || t.shipments.notAssigned })}
                     >
                       <MoreHorizontal aria-hidden="true" />
                     </DropdownMenuTrigger>
