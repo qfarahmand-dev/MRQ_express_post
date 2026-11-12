@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Info, PackagePlus } from 'lucide-react'
+import { PackagePlus } from 'lucide-react'
 import { PageHeader } from '@/components/common/page-header'
 import { LatestUpdates } from '@/components/dashboard/latest-updates'
 import { RecentShipments } from '@/components/dashboard/recent-shipments'
@@ -31,10 +31,6 @@ export function DashboardOverview() {
           </Link>
         }
       />
-      <p className="flex items-center gap-2 rounded-lg border border-dashed bg-card px-4 py-2.5 text-xs text-muted-foreground">
-        <Info className="size-4 shrink-0 text-primary" aria-hidden="true" />
-        {t.dashboard.demoNotice}
-      </p>
       <StatsCards />
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="min-w-0 xl:col-span-2">

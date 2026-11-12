@@ -44,10 +44,13 @@ export function ShipmentDetails({ id }: { id: string }) {
   const { t, lang } = useLanguage()
   const { can } = useAuth()
   const router = useRouter()
-  const { data: shipment, isLoading } = useShipment(id)
+  const { data: shipment, error, isLoading } = useShipment(id)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   if (isLoading) return <ShipmentLoading />
+  if (error) {
+    return <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{t.common.unexpectedError}</p>
+  }
   if (!shipment) return <ShipmentNotFound />
 
   const facts = [

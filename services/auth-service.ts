@@ -1,45 +1,95 @@
-import { MOCK_CURRENT_USER_ID, mockUsers } from '@/data/mock-users'
 import { getSupabaseClient } from '@/lib/supabase'
 import type { AppUser, ProfileUpdateInput } from '@/types/user'
 
-/**
- * Authentication & profile access layer.
- *
- * Sign-in only works through Supabase Auth; there is intentionally no fake login.
- * The current user is mock data until Supabase sessions and a `profiles` table
- * (with RLS, and roles assigned only by administrators) are added.
- */
-
-export type SignInResult = { ok: true } | { ok: false; error: 'not_configured' | 'invalid_credentials' }
-
-let currentUser: AppUser = structuredClone(
-  mockUsers.find((u) => u.id === MOCK_CURRENT_USER_ID) ?? mockUsers[0],
-)
+export type SignInResult = {
+  ok: true
+} | {
+  ok: false
+  error: 'not_configured' | 'invalid_credentials' | 'not_admin' | 'request_failed'
+}
 
 export const authService = {
   async signIn(email: string, password: string): Promise<SignInResult> {
     const supabase = getSupabaseClient()
-    if (!supabase) {
-      await new Promise((resolve) => setTimeout(resolve, 600))
-      return { ok: false, error: 'not_configured' }
+    if (!supabase) return { ok: false, error: 'not_configured' }
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+    if (error) return { ok: false, error: error.status === 400 ? 'invalid_credentials' : 'request_failed' }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', data.user.id)
+      .maybeSingle()
+
+    if (profileError) {
+      const { error: signOutError } = await supabase.auth.signOut()
+      if (signOutError) throw signOutError
+      return { ok: false, error: 'request_failed' }
     }
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
-    return error ? { ok: false, error: 'invalid_credentials' } : { ok: true }
+    if (profile?.role !== 'admin') {
+      const { error: signOutError } = await supabase.auth.signOut()
+      if (signOutError) throw signOutError
+      return { ok: false, error: 'not_admin' }
+    }
+
+    return { ok: true }
   },
 
   async signOut(): Promise<void> {
     const supabase = getSupabaseClient()
-    if (supabase) await supabase.auth.signOut()
+    if (!supabase) return
+    const { error } = await supabase.auth.signOut()
+    if (error) throw error
   },
 
   async getCurrentUser(): Promise<AppUser> {
-    return currentUser
+    const supabase = getSupabaseClient()
+    if (!supabase) throw new Error('Supabase is not configured')
+
+    const { data: authData, error: authError } = await supabase.auth.getUser()
+    if (authError) throw authError
+    if (!authData.user) throw new Error('No authenticated user')
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, full_name, role, created_at')
+      .eq('id', authData.user.id)
+      .single()
+
+    if (profileError) throw profileError
+
+    return {
+      id: authData.user.id,
+      fullName: profile.full_name,
+      email: authData.user.email ?? '',
+      role: profile.role,
+      createdAt: profile.created_at,
+    }
   },
 
-  /** Users can edit their name and email only — never their role. */
   async updateProfile(input: ProfileUpdateInput): Promise<AppUser> {
-    await new Promise((resolve) => setTimeout(resolve, 300))
-    currentUser = { ...currentUser, fullName: input.fullName.trim(), email: input.email.trim() }
-    return currentUser
+    const supabase = getSupabaseClient()
+    if (!supabase) throw new Error('Supabase is not configured')
+
+    const { data: authData, error: authError } = await supabase.auth.getUser()
+    if (authError) throw authError
+    if (!authData.user) throw new Error('No authenticated user')
+
+    const authUpdate = input.email.trim() === authData.user.email
+      ? await supabase.auth.updateUser({ data: { full_name: input.fullName.trim() } })
+      : await supabase.auth.updateUser({
+          email: input.email.trim(),
+          data: { full_name: input.fullName.trim() },
+        })
+    if (authUpdate.error) throw authUpdate.error
+
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ full_name: input.fullName.trim() })
+      .eq('id', authData.user.id)
+    if (profileError) throw profileError
+
+    return this.getCurrentUser()
   },
 }

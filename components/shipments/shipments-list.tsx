@@ -20,7 +20,7 @@ const PAGE_SIZE = 8
 
 export function ShipmentsList() {
   const { t, lang } = useLanguage()
-  const { data, isLoading } = useShipments()
+  const { data, error, isLoading } = useShipments()
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<ShipmentStatus | 'all'>('all')
   const [page, setPage] = useState(1)
@@ -54,6 +54,12 @@ export function ShipmentsList() {
           </Link>
         }
       />
+
+      {error && (
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          {t.common.unexpectedError}
+        </p>
+      )}
 
       <Card className="gap-0 py-0">
         <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center">

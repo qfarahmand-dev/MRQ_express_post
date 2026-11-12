@@ -9,9 +9,12 @@ import { interpolate } from '@/lib/format'
 
 export function EditShipmentView({ id }: { id: string }) {
   const { t } = useLanguage()
-  const { data: shipment, isLoading } = useShipment(id)
+  const { data: shipment, error, isLoading } = useShipment(id)
 
   if (isLoading) return <ShipmentLoading />
+  if (error) {
+    return <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{t.common.unexpectedError}</p>
+  }
   if (!shipment) return <ShipmentNotFound />
 
   return (

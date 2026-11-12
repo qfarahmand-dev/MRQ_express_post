@@ -10,13 +10,21 @@ import { shipmentService } from '@/services/shipment-service'
 
 export function TrackingResult({ number }: { number: string }) {
   const { t, lang } = useLanguage()
-  const { data, isLoading } = useSWR(['track', number], () => shipmentService.trackPublic(number))
+  const { data, error, isLoading } = useSWR(['track', number], () => shipmentService.trackPublic(number))
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center gap-2 rounded-xl border bg-card p-10 text-sm text-muted-foreground" role="status">
         <Loader2 className="size-4 animate-spin" aria-hidden="true" />
         {t.common.loading}
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+        {t.common.unexpectedError}
       </div>
     )
   }

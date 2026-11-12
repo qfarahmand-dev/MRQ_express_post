@@ -9,7 +9,7 @@ import { useShipments } from '@/hooks/use-shipments'
 
 export function RecentShipments() {
   const { t } = useLanguage()
-  const { data, isLoading } = useShipments()
+  const { data, error, isLoading } = useShipments()
 
   return (
     <Card className="h-full">
@@ -26,7 +26,11 @@ export function RecentShipments() {
         </CardAction>
       </CardHeader>
       <CardContent>
-        <ShipmentsTable shipments={(data ?? []).slice(0, 6)} loading={isLoading} compact />
+        {error ? (
+          <p role="alert" className="text-sm text-destructive">{t.common.unexpectedError}</p>
+        ) : (
+          <ShipmentsTable shipments={(data ?? []).slice(0, 6)} loading={isLoading} compact />
+        )}
       </CardContent>
     </Card>
   )

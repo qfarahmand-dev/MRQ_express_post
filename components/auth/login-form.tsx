@@ -1,14 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { AlertCircle, ArrowRight, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { AlertCircle, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { FormField } from '@/components/common/form-field'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { useLanguage } from '@/contexts/language-context'
 import { isValidEmail } from '@/lib/validation'
 import { authService } from '@/services/auth-service'
@@ -20,7 +17,6 @@ export function LoginForm() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [remember, setRemember] = useState(true)
   const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState<LoginErrors>({})
   const [formError, setFormError] = useState<string | null>(null)
@@ -49,7 +45,13 @@ export function LoginForm() {
         router.push('/dashboard')
         return
       }
-      setFormError(result.error === 'not_configured' ? t.login.errors.notConfigured : t.login.errors.invalidCredentials)
+      const messages = {
+        not_configured: t.login.errors.notConfigured,
+        invalid_credentials: t.login.errors.invalidCredentials,
+        not_admin: t.login.errors.notAdmin,
+        request_failed: t.login.errors.requestFailed,
+      }
+      setFormError(messages[result.error])
     } catch {
       setFormError(t.common.unexpectedError)
     } finally {
@@ -105,13 +107,6 @@ export function LoginForm() {
         </div>
       </FormField>
 
-      <div className="flex items-center gap-2">
-        <Checkbox id="remember" checked={remember} onCheckedChange={(checked) => setRemember(Boolean(checked))} />
-        <Label htmlFor="remember" className="text-sm font-normal text-muted-foreground">
-          {t.login.remember}
-        </Label>
-      </div>
-
       <Button type="submit" disabled={submitting} className="h-11 text-sm font-semibold">
         {submitting ? (
           <>
@@ -123,13 +118,6 @@ export function LoginForm() {
         )}
       </Button>
 
-      <Link
-        href="/dashboard"
-        className="inline-flex items-center justify-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline"
-      >
-        {t.login.demoLink}
-        <ArrowRight className="size-4 rtl:rotate-180" aria-hidden="true" />
-      </Link>
     </form>
   )
 }

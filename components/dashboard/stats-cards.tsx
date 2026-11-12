@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 
 export function StatsCards() {
   const { t, lang } = useLanguage()
-  const { data } = useShipmentStats()
+  const { data, error } = useShipmentStats()
 
   const cards = [
     { label: t.dashboard.stats.total, value: data?.total, icon: Package, tone: 'bg-primary text-highlight' },
@@ -24,7 +24,9 @@ export function StatsCards() {
   ]
 
   return (
-    <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <>
+      {error && <p role="alert" className="text-sm text-destructive">{t.common.unexpectedError}</p>}
+      <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {cards.map(({ label, value, icon: Icon, tone, hint }) => (
         <li key={label} className="flex items-start justify-between gap-4 rounded-xl border bg-card p-5 shadow-sm">
           <div className="flex flex-col gap-1">
@@ -43,6 +45,7 @@ export function StatsCards() {
           </span>
         </li>
       ))}
-    </ul>
+      </ul>
+    </>
   )
 }

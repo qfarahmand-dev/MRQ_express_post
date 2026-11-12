@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'staff'
+export type UserRole = 'admin'
 
 export interface AppUser {
   id: string
@@ -22,5 +22,4 @@ export type Permission = 'view' | 'create' | 'edit' | 'delete' | 'updateStatus'
  */
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   admin: ['view', 'create', 'edit', 'delete', 'updateStatus'],
-  staff: ['view', 'create', 'edit', 'updateStatus'],
 }

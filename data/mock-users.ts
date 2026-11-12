@@ -9,16 +9,14 @@ export const mockUsers: AppUser[] = [
     createdAt: '2025-03-12T09:00:00.000Z',
   },
   {
-    id: 'usr_staff_01',
+    id: 'usr_admin_02',
     fullName: 'Sara Ahmadi',
     email: 'sara.ahmadi@mrqexpress.com',
-    role: 'staff',
+    role: 'admin',
     createdAt: '2025-09-04T09:00:00.000Z',
   },
 ]
 
 /**
- * The signed-in user for the UI demo. Change to 'usr_staff_01' to preview the Staff role.
- * Once Supabase is connected this comes from the authenticated session instead.
+ * Demo identities retained for local fixtures. Production identity comes from Supabase Auth.
  */
-export const MOCK_CURRENT_USER_ID = 'usr_admin_01'

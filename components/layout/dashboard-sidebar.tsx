@@ -7,6 +7,7 @@ import { Logo } from '@/components/common/logo'
 import { useLanguage } from '@/contexts/language-context'
 import { cn } from '@/lib/utils'
 import { authService } from '@/services/auth-service'
+import { toast } from 'sonner'
 
 export function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
   const { t } = useLanguage()
@@ -21,9 +22,13 @@ export function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
   ]
 
   async function handleLogout() {
-    await authService.signOut()
-    onNavigate?.()
-    router.push('/login')
+    try {
+      await authService.signOut()
+      onNavigate?.()
+      router.push('/login')
+    } catch {
+      toast.error(t.common.unexpectedError)
+    }
   }
 
   return (

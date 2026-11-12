@@ -9,7 +9,7 @@ import { formatDateTime } from '@/lib/format'
 
 export function LatestUpdates() {
   const { t, lang } = useLanguage()
-  const { data: shipments } = useShipments()
+  const { data: shipments, error } = useShipments()
 
   const updates = (shipments ?? [])
     .flatMap((shipment) => shipment.events.map((event) => ({ ...event, shipment })))
@@ -22,7 +22,9 @@ export function LatestUpdates() {
         <CardTitle>{t.dashboard.latestUpdates}</CardTitle>
       </CardHeader>
       <CardContent>
-        {shipments && updates.length === 0 ? (
+        {error ? (
+          <p role="alert" className="text-sm text-destructive">{t.common.unexpectedError}</p>
+        ) : shipments && updates.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t.dashboard.noUpdates}</p>
         ) : (
           <ul className="flex flex-col divide-y">
