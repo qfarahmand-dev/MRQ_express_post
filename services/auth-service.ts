@@ -8,6 +8,10 @@ export type SignInResult = {
   error: 'not_configured' | 'invalid_credentials' | 'not_admin' | 'request_failed'
 }
 
+export type PasswordUpdateResult =
+  | { ok: true }
+  | { ok: false; error: 'not_configured' | 'not_authenticated' | 'invalid_current_password' | 'request_failed' }
+
 export const authService = {
   async signIn(email: string, password: string): Promise<SignInResult> {
     const supabase = getSupabaseClient()
@@ -91,5 +95,29 @@ export const authService = {
     if (profileError) throw profileError
 
     return this.getCurrentUser()
+  },
+
+  async updatePassword(currentPassword: string, newPassword: string): Promise<PasswordUpdateResult> {
+    const supabase = getSupabaseClient()
+    if (!supabase) return { ok: false, error: 'not_configured' }
+
+    const { data: authData, error: authError } = await supabase.auth.getUser()
+    if (authError) return { ok: false, error: 'request_failed' }
+    if (!authData.user?.email) return { ok: false, error: 'not_authenticated' }
+
+    const { error: verificationError } = await supabase.auth.signInWithPassword({
+      email: authData.user.email,
+      password: currentPassword,
+    })
+    if (verificationError) {
+      return {
+        ok: false,
+        error: verificationError.status === 400 ? 'invalid_current_password' : 'request_failed',
+      }
+    }
+
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
+    if (updateError) return { ok: false, error: 'request_failed' }
+    return { ok: true }
   },
 }

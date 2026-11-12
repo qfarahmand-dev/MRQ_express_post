@@ -2,12 +2,13 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Check, Lock, Pencil, X } from 'lucide-react'
+import { Check, KeyRound, Lock, Pencil, X } from 'lucide-react'
 import { FormField } from '@/components/common/form-field'
 import { PageHeader } from '@/components/common/page-header'
+import { ChangePasswordDialog } from '@/components/profile/change-password-dialog'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -103,6 +104,7 @@ export function ProfileView() {
   const { t, lang } = useLanguage()
   const { user } = useAuth()
   const [editing, setEditing] = useState(false)
+  const [changingPassword, setChangingPassword] = useState(false)
 
   if (!user) return <div className="h-64 animate-pulse rounded-xl bg-muted" />
 
@@ -185,7 +187,21 @@ export function ProfileView() {
         </Card>
       </div>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>{t.profile.securityTitle}</CardTitle>
+          <CardDescription>{t.profile.securityDescription}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="outline" onClick={() => setChangingPassword(true)}>
+            <KeyRound aria-hidden="true" />
+            {t.profile.changePassword}
+          </Button>
+        </CardContent>
+      </Card>
+
       {editing && <EditProfileDialog user={user} open={editing} onOpenChange={setEditing} />}
+      <ChangePasswordDialog open={changingPassword} onOpenChange={setChangingPassword} />
     </>
   )
 }
