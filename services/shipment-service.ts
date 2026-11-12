@@ -20,6 +20,7 @@ export class ShipmentServiceError extends Error {
       | 'not_found'
       | 'tracking_taken'
       | 'not_configured'
+      | 'schema_update_required'
       | 'request_failed'
       | 'photo_upload_failed'
       | 'photo_cleanup_failed',
@@ -39,6 +40,9 @@ function getClient() {
 function throwDatabaseError(error: { code?: string; message: string }): never {
   if (error.code === '23505') throw new ShipmentServiceError('tracking_taken', error.message)
   if (error.code === 'P0002') throw new ShipmentServiceError('not_found', error.message)
+  if (error.code === 'PGRST202' || error.code === '42883') {
+    throw new ShipmentServiceError('schema_update_required', error.message)
+  }
   throw new ShipmentServiceError('request_failed', error.message)
 }
 
@@ -321,6 +325,9 @@ export const shipmentService = {
     if (error) throwDatabaseError(error)
     const stats = data[0]
     if (!stats) throw new ShipmentServiceError('request_failed', 'Supabase returned no shipment statistics')
+    if (![stats.total, stats.in_warehouse, stats.in_transit, stats.delivered].every((value) => Number.isFinite(Number(value)))) {
+      throw new ShipmentServiceError('schema_update_required', 'The shipment statistics RPC has an outdated response shape')
+    }
 
     return {
       total: Number(stats.total),

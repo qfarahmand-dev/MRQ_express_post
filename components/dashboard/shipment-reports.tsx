@@ -6,6 +6,7 @@ import { useLanguage } from '@/contexts/language-context'
 import { useShipmentReports } from '@/hooks/use-shipments'
 import { getCountryName } from '@/lib/countries'
 import { formatNumber } from '@/lib/format'
+import { ShipmentServiceError } from '@/services/shipment-service'
 
 export function ShipmentReports({ compact = false }: { compact?: boolean }) {
   const { t, lang } = useLanguage()
@@ -13,7 +14,13 @@ export function ShipmentReports({ compact = false }: { compact?: boolean }) {
   const maxCountryCount = Math.max(...(data?.topDestinations.map((destination) => destination.total) ?? [1]), 1)
 
   if (error) {
-    return <p role="alert" className="text-sm text-destructive">{t.common.unexpectedError}</p>
+    return (
+      <p role="alert" className="text-sm text-destructive">
+        {error instanceof ShipmentServiceError && error.code === 'schema_update_required'
+          ? t.dashboard.reportingMigrationRequired
+          : t.common.unexpectedError}
+      </p>
+    )
   }
 
   const periods = [

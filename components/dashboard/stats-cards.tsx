@@ -5,6 +5,7 @@ import { useLanguage } from '@/contexts/language-context'
 import { useShipmentStats } from '@/hooks/use-shipments'
 import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { ShipmentServiceError } from '@/services/shipment-service'
 
 export function StatsCards() {
   const { t, lang } = useLanguage()
@@ -25,7 +26,13 @@ export function StatsCards() {
 
   return (
     <>
-      {error && <p role="alert" className="text-sm text-destructive">{t.common.unexpectedError}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error instanceof ShipmentServiceError && error.code === 'schema_update_required'
+            ? t.dashboard.reportingMigrationRequired
+            : t.common.unexpectedError}
+        </p>
+      )}
       <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {cards.map(({ label, value, icon: Icon, tone, hint }) => (
         <li key={label} className="flex items-start justify-between gap-4 rounded-xl border bg-card p-5 shadow-sm">

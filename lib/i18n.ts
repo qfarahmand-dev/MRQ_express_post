@@ -210,6 +210,8 @@ const en = {
     noDestinationData: 'Destination country statistics will appear after shipments are registered with a destination.',
     reportsTitle: 'Shipment Reports',
     reportsDescription: 'Shipment registration totals and the most common destination countries.',
+    reportingMigrationRequired:
+      'Supabase reporting is not set up yet. Run the database migrations in supabase/README.md, especially 20261113000000_destination_reporting.sql, then reload.',
     recentShipments: 'Recent Shipments',
     viewAll: 'View all',
     latestUpdates: 'Latest Shipment Updates',
@@ -594,6 +596,8 @@ const fa: Dictionary = {
     noDestinationData: 'پس از ثبت مرسوله با کشور مقصد، آمار کشورها نمایش داده می‌شود.',
     reportsTitle: 'گزارش مرسوله‌ها',
     reportsDescription: 'مجموع ثبت مرسوله‌ها و پرتکرارترین کشورهای مقصد.',
+    reportingMigrationRequired:
+      'گزارش‌های Supabase هنوز تنظیم نشده‌اند. migrationهای راهنمای supabase/README.md، به‌ویژه 20261113000000_destination_reporting.sql، را اجرا و سپس صفحه را تازه‌سازی کنید.',
     recentShipments: 'مرسوله‌های اخیر',
     viewAll: 'مشاهده همه',
     latestUpdates: 'آخرین به‌روزرسانی‌ها',

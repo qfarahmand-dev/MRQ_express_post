@@ -22,6 +22,8 @@ The database creates a profile when an allowlisted Auth user is created or when 
 
 The shipment-details migration makes tracking numbers optional, adds weight, dimensions, carrier and received-date fields, and creates a private Storage bucket for sender ID/passport and receiver-home photos. Photos are restricted to administrators and limited to JPEG, PNG or WebP files up to 5 MB. Existing shipments retain unknown weight and carrier values until an administrator edits them.
 
+If the dashboard or Reports page reports a database/schema error, make sure the destination-reporting migration has been run. The initial schema alone does not include `get_shipment_reports()` and uses an older stats response.
+
 ## 2. Configure local development
 
 Copy `.env.example` to `.env.local` and set values from **Project Settings → API**:
