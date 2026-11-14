@@ -1,45 +1,31 @@
 'use client'
 
-import Link from 'next/link'
-import { PackagePlus } from 'lucide-react'
-import { PageHeader } from '@/components/common/page-header'
-import { LatestUpdates } from '@/components/dashboard/latest-updates'
-import { RecentShipments } from '@/components/dashboard/recent-shipments'
-import { ShipmentReports } from '@/components/dashboard/shipment-reports'
-import { StatsCards } from '@/components/dashboard/stats-cards'
-import { buttonVariants } from '@/components/ui/button'
+import { AdminDashboard, OfficeManagerDashboard, StorekeeperDashboard } from '@/components/dashboard/role-dashboard-panels'
 import { useAuth } from '@/contexts/auth-context'
 import { useLanguage } from '@/contexts/language-context'
-import { interpolate } from '@/lib/format'
-import { cn } from '@/lib/utils'
 
 export function DashboardOverview() {
   const { t } = useLanguage()
-  const { user } = useAuth()
+  const { user, isLoading, error } = useAuth()
 
-  return (
-    <>
-      <PageHeader
-        title={user ? interpolate(t.dashboard.welcome, { name: user.fullName.split(' ')[0] }) : t.dashboard.title}
-        description={t.dashboard.subtitle}
-        actions={
-          <Link
-            href="/dashboard/shipments/new"
-            className={cn(buttonVariants({ size: 'lg' }), 'bg-highlight px-4 font-semibold text-highlight-foreground hover:bg-highlight/85')}
-          >
-            <PackagePlus aria-hidden="true" />
-            {t.dashboard.registerNew}
-          </Link>
-        }
-      />
-      <StatsCards />
-      <ShipmentReports compact />
-      <div className="grid gap-6 xl:grid-cols-3">
-        <div className="min-w-0 xl:col-span-2">
-          <RecentShipments />
-        </div>
-        <LatestUpdates />
-      </div>
-    </>
-  )
+  if (error) {
+    return <p role="alert" className="text-sm text-destructive">{t.common.unexpectedError}</p>
+  }
+
+  if (isLoading) {
+    return <p role="status" className="rounded-lg border bg-card p-5 text-sm text-muted-foreground">{t.roleDashboard.accessLoading}</p>
+  }
+
+  if (!user) {
+    return <p role="alert" className="text-sm text-destructive">{t.common.unexpectedError}</p>
+  }
+
+  switch (user.role) {
+    case 'admin':
+      return <AdminDashboard />
+    case 'office_manager':
+      return <OfficeManagerDashboard />
+    case 'storekeeper':
+      return <StorekeeperDashboard />
+  }
 }

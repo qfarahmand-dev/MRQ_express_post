@@ -6,6 +6,8 @@ export const mockUsers: AppUser[] = [
     fullName: 'Mohammad Rahimi',
     email: 'admin@mrqexpress.com',
     role: 'admin',
+    officeId: null,
+    accountStatus: 'active',
     createdAt: '2025-03-12T09:00:00.000Z',
   },
   {
@@ -13,6 +15,8 @@ export const mockUsers: AppUser[] = [
     fullName: 'Sara Ahmadi',
     email: 'sara.ahmadi@mrqexpress.com',
     role: 'admin',
+    officeId: null,
+    accountStatus: 'active',
     createdAt: '2025-09-04T09:00:00.000Z',
   },
 ]

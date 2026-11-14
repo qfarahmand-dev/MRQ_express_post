@@ -5,6 +5,8 @@ import { DashboardTopbar } from '@/components/layout/dashboard-topbar'
 import { AuthProvider } from '@/contexts/auth-context'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { isUserRole } from '@/types/user'
+import { PermissionGuard } from '@/components/auth/permission-guard'
 
 export const metadata: Metadata = {
   title: { default: 'Dashboard', template: '%s | MRQ Express Post' },
@@ -27,7 +29,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .eq('id', authData.user.id)
     .maybeSingle()
   if (error) throw error
-  if (profile?.role !== 'admin') redirect('/login')
+  if (!profile || !isUserRole(profile.role)) redirect('/login')
 
   return (
     <AuthProvider>
@@ -35,7 +37,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <DashboardSidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <DashboardTopbar />
-          <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-4 sm:p-6 lg:p-8">{children}</main>
+          <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-4 sm:p-6 lg:p-8">
+            <PermissionGuard>{children}</PermissionGuard>
+          </main>
         </div>
       </div>
     </AuthProvider>

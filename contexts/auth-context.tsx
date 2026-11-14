@@ -4,18 +4,30 @@ import { createContext, useCallback, useContext, useEffect, useMemo } from 'reac
 import useSWR from 'swr'
 import { getSupabaseClient } from '@/lib/supabase'
 import { authService } from '@/services/auth-service'
-import { ROLE_PERMISSIONS, type AppUser, type Permission, type ProfileUpdateInput } from '@/types/user'
+import {
+  canAccess as checkAccess,
+  hasCapability as checkCapability,
+  ROLE_PERMISSIONS,
+  type AppUser,
+  type Capability,
+  type Permission,
+  type ProfileUpdateInput,
+} from '@/types/user'
 
 interface AuthContextValue {
   user: AppUser | undefined
+  isLoading: boolean
+  error: unknown
   can: (permission: Permission) => boolean
+  hasCapability: (capability: Capability) => boolean
+  canAccess: (capability: Capability, targetOfficeId?: string) => boolean
   updateProfile: (input: ProfileUpdateInput) => Promise<AppUser>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { data: user, mutate } = useSWR('current-user', () => authService.getCurrentUser())
+  const { data: user, mutate, isLoading, error } = useSWR('current-user', () => authService.getCurrentUser())
 
   useEffect(() => {
     const supabase = getSupabaseClient()
@@ -51,6 +63,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (permission: Permission) => (user ? ROLE_PERMISSIONS[user.role].includes(permission) : false),
     [user],
   )
+  const hasCapability = useCallback(
+    (capability: Capability) => checkCapability(user, capability),
+    [user],
+  )
+  const canAccess = useCallback(
+    (capability: Capability, targetOfficeId?: string) => checkAccess(user, capability, targetOfficeId),
+    [user],
+  )
 
   const updateProfile = useCallback(
     async (input: ProfileUpdateInput) => {
@@ -61,7 +81,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [mutate],
   )
 
-  const value = useMemo(() => ({ user, can, updateProfile }), [user, can, updateProfile])
+  const value = useMemo(
+    () => ({ user, isLoading, error, can, hasCapability, canAccess, updateProfile }),
+    [user, isLoading, error, can, hasCapability, canAccess, updateProfile],
+  )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

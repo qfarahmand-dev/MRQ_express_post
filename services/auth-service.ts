@@ -68,6 +68,8 @@ export const authService = {
       fullName: profile.full_name,
       email: authData.user.email ?? '',
       role: profile.role,
+      officeId: null,
+      accountStatus: 'active',
       createdAt: profile.created_at,
     }
   },
