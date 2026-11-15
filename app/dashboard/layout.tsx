@@ -20,7 +20,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const supabase = await createServerSupabaseClient()
   const { data: authData, error: authError } = await supabase.auth.getUser()
-  if (authError) throw authError
+  if (authError && authError.name !== 'AuthSessionMissingError') throw authError
   if (!authData.user) redirect('/login')
 
   const { data: profile, error } = await supabase
