@@ -37,6 +37,7 @@ export interface ShipmentEvent {
 
 export interface Shipment {
   id: string
+  officeId: string | null
   trackingNumber: string | null
   destinationCountry: string
   sender: PartyInfo
@@ -57,6 +58,7 @@ export interface Shipment {
 }
 
 export interface ShipmentInput {
+  officeId?: string | null
   trackingNumber: string
   destinationCountry: string
   sender: PartyInfo

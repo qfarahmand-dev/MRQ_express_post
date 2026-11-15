@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Eye, Pencil, Plus, Search, UserRound, UserRoundCheck, UserRoundX } from 'lucide-react'
 import { toast } from 'sonner'
 import { FormField } from '@/components/common/form-field'
@@ -21,7 +21,7 @@ import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useAuth } from '@/contexts/auth-context'
 import { useLanguage } from '@/contexts/language-context'
-import { demoManagedOffices, demoManagedUsers, type ManagedUser } from '@/data/demo-management-data'
+import type { ManagedOffice, ManagedUser } from '@/data/demo-management-data'
 import { formatDate, initials } from '@/lib/format'
 import { isValidEmail } from '@/lib/validation'
 import { isUserRole, USER_ROLES, type AccountStatus } from '@/types/user'
@@ -46,7 +46,11 @@ function StatusPill({ status }: { status: AccountStatus }) {
 export function UserManagementView({ officeEmployeesOnly = false }: { officeEmployeesOnly?: boolean }) {
   const { t, lang } = useLanguage()
   const { user: currentUser } = useAuth()
-  const [users, setUsers] = useState(demoManagedUsers)
+  const [users, setUsers] = useState<ManagedUser[]>([])
+  const [offices, setOffices] = useState<ManagedOffice[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<FilterValue>('all')
   const [officeFilter, setOfficeFilter] = useState<FilterValue>('all')
@@ -63,6 +67,32 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
   const [formError, setFormError] = useState('')
 
   const isManager = officeEmployeesOnly
+
+  useEffect(() => {
+    let active = true
+    async function loadManagementData() {
+      try {
+        const [usersResponse, officesResponse] = await Promise.all([
+          fetch('/api/management/users', { cache: 'no-store' }),
+          fetch('/api/management/offices', { cache: 'no-store' }),
+        ])
+        const [usersResult, officesResult] = await Promise.all([
+          usersResponse.json(),
+          officesResponse.json(),
+        ])
+        if (!usersResponse.ok || !officesResponse.ok) throw new Error('Management data could not be loaded')
+        if (!active) return
+        setUsers(usersResult.users)
+        setOffices(officesResult.offices)
+      } catch {
+        if (active) setLoadError(true)
+      } finally {
+        if (active) setIsLoading(false)
+      }
+    }
+    void loadManagementData()
+    return () => { active = false }
+  }, [])
   const visibleUsers = useMemo(() => {
     const query = search.trim().toLocaleLowerCase()
     return users.filter((entry) => {
@@ -99,7 +129,7 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
     setDialog({ mode: 'edit', user: entry })
   }
 
-  function saveDraft(event: React.FormEvent<HTMLFormElement>) {
+  async function saveDraft(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const officeId = isManager ? currentUser?.officeId ?? null : draft.officeId
     if (!draft.fullName.trim()) {
@@ -119,36 +149,77 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
       return
     }
 
-    const nextUser: ManagedUser = {
-      id: dialog?.mode === 'edit' ? dialog.user.id : `demo-user-${crypto.randomUUID()}`,
-      fullName: draft.fullName.trim(),
-      email: draft.email.trim(),
-      role: draft.role,
-      officeId: draft.role === 'admin' ? null : officeId,
-      accountStatus: draft.accountStatus,
-      createdAt: dialog?.mode === 'edit' ? dialog.user.createdAt : new Date().toISOString(),
-      lastLoginAt: dialog?.mode === 'edit' ? dialog.user.lastLoginAt : null,
+    const body = isManager
+      ? {
+          id: dialog?.mode === 'edit' ? dialog.user.id : undefined,
+          fullName: draft.fullName.trim(),
+          accountStatus: draft.accountStatus,
+        }
+      : {
+          ...(dialog?.mode === 'edit' ? { id: dialog.user.id } : {}),
+          fullName: draft.fullName.trim(),
+          email: draft.email.trim(),
+          role: draft.role,
+          officeId: draft.role === 'admin' ? null : officeId,
+          accountStatus: draft.accountStatus,
+        }
+    setIsSaving(true)
+    try {
+      const response = await fetch('/api/management/users', {
+        method: dialog?.mode === 'edit' ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error('User could not be saved')
+      if (dialog?.mode === 'edit') {
+        setUsers((current) => current.map((entry) => entry.id === result.user.id ? result.user : entry))
+      } else {
+        setUsers((current) => [result.user, ...current])
+      }
+      setDialog(null)
+      toast.success(dialog?.mode === 'create' ? t.management.inviteSent : t.management.userSaved)
+    } catch {
+      setFormError(t.common.unexpectedError)
+    } finally {
+      setIsSaving(false)
     }
-
-    setUsers((current) => dialog?.mode === 'edit'
-      ? current.map((entry) => entry.id === dialog.user.id ? nextUser : entry)
-      : [nextUser, ...current])
-    setDialog(null)
-    toast.info(t.management.previewChangeNotice)
   }
 
-  function toggleStatus() {
+  async function toggleStatus() {
     if (!deactivatingUser) return
     const nextStatus = deactivatingUser.accountStatus === 'active' ? 'inactive' : 'active'
-    setUsers((current) => current.map((entry) => entry.id === deactivatingUser.id
-      ? { ...entry, accountStatus: nextStatus }
-      : entry))
-    setDeactivatingUser(null)
-    toast.info(t.management.previewChangeNotice)
+    setIsSaving(true)
+    try {
+      const body = isManager
+        ? { id: deactivatingUser.id, accountStatus: nextStatus }
+        : {
+            id: deactivatingUser.id,
+            fullName: deactivatingUser.fullName,
+            email: deactivatingUser.email,
+            role: deactivatingUser.role,
+            officeId: deactivatingUser.officeId,
+            accountStatus: nextStatus,
+          }
+      const response = await fetch('/api/management/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error('User status could not be changed')
+      setUsers((current) => current.map((entry) => entry.id === result.user.id ? result.user : entry))
+      setDeactivatingUser(null)
+      toast.success(t.management.userSaved)
+    } catch {
+      setLoadError(true)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const officeName = (officeId: string | null) => (
-    officeId ? demoManagedOffices.find((office) => office.id === officeId)?.name ?? officeId : t.management.noOffice
+    officeId ? offices.find((office) => office.id === officeId)?.name ?? officeId : t.management.noOffice
   )
 
   if (isManager && !currentUser?.officeId) {
@@ -175,7 +246,8 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
           </Button>
         }
       />
-      <ManagementNotice>{t.management.userDemoNotice}</ManagementNotice>
+      <ManagementNotice>{t.management.userLiveNotice}</ManagementNotice>
+      {loadError && <p role="alert" className="text-sm text-destructive">{t.common.unexpectedError}</p>}
 
       <Card>
         <CardContent className="flex flex-col gap-4">
@@ -199,14 +271,14 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
             </label>
             {isManager ? (
               <div className="flex h-10 items-center rounded-lg border bg-muted/40 px-3 text-sm text-muted-foreground">
-                {demoManagedOffices.find((office) => office.id === currentUser?.officeId)?.name ?? currentUser?.officeId}
+                {offices.find((office) => office.id === currentUser?.officeId)?.name ?? currentUser?.officeId}
               </div>
             ) : (
               <label>
                 <span className="sr-only">{t.management.filterOffice}</span>
                 <select aria-label={t.management.filterOffice} value={officeFilter} onChange={(event) => setOfficeFilter(event.target.value)} className={fieldClass}>
                   <option value="all">{t.management.allOffices}</option>
-                  {demoManagedOffices.map((office) => <option key={office.id} value={office.id}>{office.name}</option>)}
+                  {offices.map((office) => <option key={office.id} value={office.id}>{office.name}</option>)}
                   <option value="">{t.management.noOffice}</option>
                 </select>
               </label>
@@ -234,7 +306,9 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visibleUsers.map((entry) => (
+              {isLoading ? (
+                <TableRow><TableCell colSpan={isManager ? 6 : 7} className="py-12 text-center text-sm text-muted-foreground">{t.common.loading}</TableCell></TableRow>
+              ) : visibleUsers.map((entry) => (
                 <TableRow key={entry.id}>
                   <TableCell>
                     <div className="flex min-w-48 items-center gap-3">
@@ -276,7 +350,7 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
                   </TableCell>
                 </TableRow>
               ))}
-              {visibleUsers.length === 0 && (
+              {!isLoading && visibleUsers.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={isManager ? 6 : 7} className="py-12 text-center">
                     <UserRound className="mx-auto mb-2 size-6 text-muted-foreground" aria-hidden="true" />
@@ -294,7 +368,7 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
           <form onSubmit={saveDraft} className="flex flex-col gap-5">
             <DialogHeader>
               <DialogTitle>{dialog?.mode === 'edit' ? t.management.editUser : t.management.createUser}</DialogTitle>
-              <DialogDescription>{t.management.userDemoNotice}</DialogDescription>
+              <DialogDescription>{isManager ? t.management.employeeDescription : t.management.userLiveNotice}</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField id="managed-user-name" label={t.management.fullName} required>
@@ -308,7 +382,7 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
                   id="managed-user-role"
                   value={draft.role}
                   onChange={(event) => {
-                    if (!isUserRole(event.target.value) || (isManager && event.target.value === 'admin')) return
+                    if (!isUserRole(event.target.value) || (isManager && event.target.value !== 'storekeeper')) return
                     setDraft({
                       ...draft,
                       role: event.target.value,
@@ -317,17 +391,17 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
                   }}
                   className={fieldClass}
                 >
-                  {USER_ROLES.map((role) => <option key={role} value={role} disabled={isManager && role === 'admin'}>{role === 'admin' ? t.management.adminRole : t.roles[role]}</option>)}
+                  {USER_ROLES.map((role) => <option key={role} value={role} disabled={isManager && role !== 'storekeeper'}>{role === 'admin' ? t.management.adminRole : t.roles[role]}</option>)}
                 </select>
               </FormField>
               {draft.role !== 'admin' && (
                 <FormField id="managed-user-office" label={t.management.office} required>
                   {isManager ? (
-                    <Input id="managed-user-office" value={demoManagedOffices.find((office) => office.id === currentUser?.officeId)?.name ?? currentUser?.officeId ?? ''} readOnly />
+                    <Input id="managed-user-office" value={offices.find((office) => office.id === currentUser?.officeId)?.name ?? currentUser?.officeId ?? ''} readOnly />
                   ) : (
                     <select id="managed-user-office" value={draft.officeId ?? ''} onChange={(event) => setDraft({ ...draft, officeId: event.target.value || null })} className={fieldClass}>
                       <option value="">{t.management.selectOffice}</option>
-                      {demoManagedOffices.filter((office) => office.status === 'active').map((office) => <option key={office.id} value={office.id}>{office.name}</option>)}
+                      {offices.filter((office) => office.status === 'active').map((office) => <option key={office.id} value={office.id}>{office.name}</option>)}
                     </select>
                   )}
                 </FormField>
@@ -346,7 +420,7 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
             {formError && <p role="alert" className="text-sm text-destructive">{formError}</p>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setDialog(null)}>{t.common.cancel}</Button>
-              <Button type="submit">{t.management.savePreview}</Button>
+              <Button type="submit" disabled={isSaving}>{isSaving ? t.common.saving : t.common.save}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -357,7 +431,7 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>{t.management.userDetails}</DialogTitle>
-              <DialogDescription>{t.management.demoRecord}</DialogDescription>
+              <DialogDescription>{t.management.liveRecord}</DialogDescription>
             </DialogHeader>
             <dl className="grid gap-3 sm:grid-cols-2">
               {[
@@ -388,7 +462,7 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
             </DialogHeader>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDeactivatingUser(null)}>{t.common.cancel}</Button>
-              <Button variant={deactivatingUser.accountStatus === 'active' ? 'destructive' : 'default'} onClick={toggleStatus}>
+              <Button disabled={isSaving} variant={deactivatingUser.accountStatus === 'active' ? 'destructive' : 'default'} onClick={toggleStatus}>
                 {deactivatingUser.accountStatus === 'active' ? t.management.deactivate : t.management.activate}
               </Button>
             </DialogFooter>

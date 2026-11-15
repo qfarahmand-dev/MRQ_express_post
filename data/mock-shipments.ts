@@ -26,6 +26,7 @@ function build(seed: Seed): Shipment {
   const last = events[events.length - 1]
   return {
     id: seed.id,
+    officeId: null,
     trackingNumber: seed.trackingNumber,
     destinationCountry: seed.destinationCountry,
     sender: seed.sender,

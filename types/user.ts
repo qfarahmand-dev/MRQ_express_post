@@ -6,6 +6,7 @@ export function isUserRole(value: unknown): value is UserRole {
 }
 
 export type AccountStatus = 'active' | 'inactive'
+export type OfficeStatus = AccountStatus
 
 export type UserAssignment =
   | { role: 'admin'; officeId: null; accountStatus: AccountStatus }

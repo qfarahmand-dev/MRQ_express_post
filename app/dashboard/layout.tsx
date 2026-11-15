@@ -25,11 +25,26 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const { data: profile, error } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, office_id, account_status')
     .eq('id', authData.user.id)
     .maybeSingle()
   if (error) throw error
-  if (!profile || !isUserRole(profile.role)) redirect('/login')
+  if (
+    !profile
+    || !isUserRole(profile.role)
+    || profile.account_status !== 'active'
+    || (profile.role !== 'admin' && !profile.office_id)
+  ) redirect('/login')
+  if (profile.role !== 'admin') {
+    if (!profile.office_id) redirect('/login')
+    const { data: office, error: officeError } = await supabase
+      .from('offices')
+      .select('status')
+      .eq('id', profile.office_id)
+      .maybeSingle()
+    if (officeError) throw officeError
+    if (office?.status !== 'active') redirect('/login')
+  }
 
   return (
     <AuthProvider>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -21,6 +21,7 @@ import { shipmentService, ShipmentServiceError } from '@/services/shipment-servi
 import { PACKAGE_TYPES, SHIPPING_COMPANIES, type Shipment, type ShipmentInput, type ShipmentPhotoKind } from '@/types/shipment'
 
 const emptyInput = (): ShipmentInput => ({
+  officeId: null,
   trackingNumber: '',
   destinationCountry: '',
   sender: { name: '', phone: '', address: '' },
@@ -36,6 +37,7 @@ const emptyInput = (): ShipmentInput => ({
 })
 
 const toInput = (s: Shipment): ShipmentInput => ({
+  officeId: s.officeId,
   trackingNumber: s.trackingNumber ?? '',
   destinationCountry: s.destinationCountry,
   sender: { ...s.sender },
@@ -78,6 +80,25 @@ export function ShipmentForm({ shipment }: { shipment?: Shipment }) {
   const [senderIdPhoto, setSenderIdPhoto] = useState<File | null>(null)
   const [receiverHomePhoto, setReceiverHomePhoto] = useState<File | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [officeOptions, setOfficeOptions] = useState<{ id: string; name: string }[]>([])
+  const [officeLoadError, setOfficeLoadError] = useState(false)
+
+  useEffect(() => {
+    if (user?.role !== 'admin') return
+    let active = true
+    async function loadOffices() {
+      try {
+        const response = await fetch('/api/management/offices', { cache: 'no-store' })
+        const result = await response.json()
+        if (!response.ok) throw new Error('Office list could not be loaded')
+        if (active) setOfficeOptions(result.offices)
+      } catch {
+        if (active) setOfficeLoadError(true)
+      }
+    }
+    void loadOffices()
+    return () => { active = false }
+  }, [user?.role])
 
   const errorText = (field: string) => {
     if (field === 'trackingNumber' && trackingTaken) return t.form.errors.trackingTaken
@@ -256,6 +277,21 @@ export function ShipmentForm({ shipment }: { shipment?: Shipment }) {
       </FormSection>
 
       <FormSection icon={Package} title={t.form.packageSection} hint={t.form.packageHint}>
+        {user?.role === 'admin' && (
+          <FormField id="shipment-office" label={t.management.office}>
+            <select
+              id="shipment-office"
+              value={values.officeId ?? ''}
+              onChange={(event) => setField('officeId', event.target.value || null)}
+              disabled={officeLoadError || officeOptions.length === 0}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+            >
+              <option value="">{t.management.noOffice}</option>
+              {officeOptions.map((office) => <option key={office.id} value={office.id}>{office.name}</option>)}
+            </select>
+            {officeLoadError && <p role="alert" className="text-xs text-destructive">{t.common.unexpectedError}</p>}
+          </FormField>
+        )}
         <FormField id="destinationCountry" label={t.form.destinationCountry} required error={errorText('destinationCountry')}>
           <select
             id="destinationCountry"

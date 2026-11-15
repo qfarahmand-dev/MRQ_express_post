@@ -19,6 +19,9 @@ export interface ManagedOffice {
   phone: string
   email: string
   managerUserId: string | null
+  managerName?: string | null
+  managerEmail?: string | null
+  employeeCount?: number
   status: AccountStatus
 }
 

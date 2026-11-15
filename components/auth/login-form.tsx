@@ -48,7 +48,7 @@ export function LoginForm() {
       const messages = {
         not_configured: t.login.errors.notConfigured,
         invalid_credentials: t.login.errors.invalidCredentials,
-        not_admin: t.login.errors.notAdmin,
+        not_authorized: t.login.errors.notAuthorized,
         request_failed: t.login.errors.requestFailed,
       }
       setFormError(messages[result.error])

@@ -10,6 +10,7 @@ import type {
   StatusUpdateInput,
 } from '@/types/shipment'
 import type { Database } from '@/types/database'
+import type { UserRole } from '@/types/user'
 
 type ShipmentRow = Database['public']['Tables']['shipments']['Row']
 type EventRow = Database['public']['Tables']['shipment_events']['Row']
@@ -77,6 +78,7 @@ function mapEvent(row: EventRow) {
 function mapShipment(row: ShipmentRow, events: ReturnType<typeof mapEvent>[]): Shipment {
   return {
     id: row.id,
+    officeId: row.office_id,
     trackingNumber: row.tracking_number,
     destinationCountry: row.destination_country,
     sender: { name: row.sender_name, phone: row.sender_phone, address: row.sender_address },
@@ -205,6 +207,14 @@ export const shipmentService = {
     if (error) throwDatabaseError(error)
     if (!id) throw new ShipmentServiceError('request_failed', 'Supabase did not return the new shipment id')
 
+    if (input.officeId !== undefined) {
+      const { error: assignmentError } = await getClient()
+        .from('shipments')
+        .update({ office_id: input.officeId })
+        .eq('id', id)
+      if (assignmentError) throwDatabaseError(assignmentError)
+    }
+
     const shipment = await this.getById(id)
     if (!shipment) throw new ShipmentServiceError('request_failed', 'Created shipment could not be loaded')
     return shipment
@@ -218,13 +228,29 @@ export const shipmentService = {
     if (error) throwDatabaseError(error)
     if (!updatedId) throw new ShipmentServiceError('not_found')
 
+    if (input.officeId !== undefined) {
+      const { error: assignmentError } = await getClient()
+        .from('shipments')
+        .update({ office_id: input.officeId })
+        .eq('id', updatedId)
+      if (assignmentError) throwDatabaseError(assignmentError)
+    }
+
     const shipment = await this.getById(updatedId)
     if (!shipment) throw new ShipmentServiceError('not_found')
     return shipment
   },
 
-  async updateStatus(id: string, input: StatusUpdateInput, _userId: string): Promise<Shipment> {
-    const { data: updatedId, error } = await getClient().rpc('update_shipment_status', {
+  async updateStatus(id: string, input: StatusUpdateInput, _userId: string, role: UserRole): Promise<Shipment> {
+    const client = getClient()
+    const { data: updatedId, error } = role === 'storekeeper'
+      ? await client.rpc('warehouse_update_shipment_status', {
+          p_shipment_id: id,
+          p_status: input.status,
+          p_location: input.location?.trim() || null,
+          p_note: input.note?.trim() || null,
+        })
+      : await client.rpc('update_shipment_status', {
       p_shipment_id: id,
       p_status: input.status,
       p_location: input.location?.trim() || null,

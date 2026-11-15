@@ -29,7 +29,7 @@ export function StatusUpdateForm({ shipment }: { shipment: Shipment }) {
     if (!user) return
     setSubmitting(true)
     try {
-      await shipmentService.updateStatus(shipment.id, { status, location, note }, user.id)
+      await shipmentService.updateStatus(shipment.id, { status, location, note }, user.id, user.role)
       await refreshShipments()
       toast.success(interpolate(t.details.statusUpdated, { status: t.statuses[status] }))
       setLocation('')

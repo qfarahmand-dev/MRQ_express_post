@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Building2, Eye, Pencil, Plus, Search, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { FormField } from '@/components/common/form-field'
@@ -20,11 +20,11 @@ import {
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useLanguage } from '@/contexts/language-context'
-import { demoManagedOffices, demoManagedUsers, type ManagedOffice } from '@/data/demo-management-data'
+import { type ManagedOffice, type ManagedUser } from '@/data/demo-management-data'
 import { initials } from '@/lib/format'
 import { type AccountStatus } from '@/types/user'
 
-type OfficeDraft = Omit<ManagedOffice, 'id'>
+type OfficeDraft = Pick<ManagedOffice, 'name' | 'code' | 'address' | 'phone' | 'email' | 'status'>
 type OfficeDialogState = { mode: 'create' } | { mode: 'edit' | 'details'; office: ManagedOffice }
 
 const fieldClass = 'h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
@@ -42,7 +42,11 @@ function OfficeStatus({ status }: { status: AccountStatus }) {
 
 export function OfficeManagementView() {
   const { t } = useLanguage()
-  const [offices, setOffices] = useState(demoManagedOffices)
+  const [offices, setOffices] = useState<ManagedOffice[]>([])
+  const [users, setUsers] = useState<ManagedUser[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [dialog, setDialog] = useState<OfficeDialogState | null>(null)
@@ -52,11 +56,35 @@ export function OfficeManagementView() {
     address: '',
     phone: '',
     email: '',
-    managerUserId: null,
     status: 'active',
   })
   const [formError, setFormError] = useState('')
-  const managers = demoManagedUsers.filter((entry) => entry.role === 'office_manager' && entry.accountStatus === 'active')
+
+  useEffect(() => {
+    let active = true
+    async function loadManagementData() {
+      try {
+        const [officesResponse, usersResponse] = await Promise.all([
+          fetch('/api/management/offices', { cache: 'no-store' }),
+          fetch('/api/management/users', { cache: 'no-store' }),
+        ])
+        const [officesResult, usersResult] = await Promise.all([
+          officesResponse.json(),
+          usersResponse.json(),
+        ])
+        if (!officesResponse.ok || !usersResponse.ok) throw new Error('Management data could not be loaded')
+        if (!active) return
+        setOffices(officesResult.offices)
+        setUsers(usersResult.users)
+      } catch {
+        if (active) setLoadError(true)
+      } finally {
+        if (active) setIsLoading(false)
+      }
+    }
+    void loadManagementData()
+    return () => { active = false }
+  }, [])
   const visibleOffices = useMemo(() => {
     const query = search.trim().toLocaleLowerCase()
     return offices.filter((office) => {
@@ -66,7 +94,7 @@ export function OfficeManagementView() {
   }, [offices, search, statusFilter])
 
   function startCreate() {
-    setDraft({ name: '', code: '', address: '', phone: '', email: '', managerUserId: null, status: 'active' })
+    setDraft({ name: '', code: '', address: '', phone: '', email: '', status: 'active' })
     setFormError('')
     setDialog({ mode: 'create' })
   }
@@ -78,14 +106,13 @@ export function OfficeManagementView() {
       address: office.address,
       phone: office.phone,
       email: office.email,
-      managerUserId: office.managerUserId,
       status: office.status,
     })
     setFormError('')
     setDialog({ mode: 'edit', office })
   }
 
-  function saveDraft(event: React.FormEvent<HTMLFormElement>) {
+  async function saveDraft(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!draft.name.trim() || !draft.code.trim() || !draft.address.trim() || !draft.phone.trim() || !draft.email.trim()) {
       setFormError(t.management.officeFieldsRequired)
@@ -100,27 +127,41 @@ export function OfficeManagementView() {
       return
     }
 
-    const nextOffice: ManagedOffice = {
-      ...draft,
-      id: dialog?.mode === 'edit' ? dialog.office.id : `demo-office-${crypto.randomUUID()}`,
-      name: draft.name.trim(),
-      code: draft.code.trim().toUpperCase(),
-      address: draft.address.trim(),
-      phone: draft.phone.trim(),
-      email: draft.email.trim(),
+    setIsSaving(true)
+    try {
+      const requestBody = {
+        ...(dialog?.mode === 'edit' ? { id: dialog.office.id } : {}),
+        ...draft,
+        name: draft.name.trim(),
+        code: draft.code.trim().toUpperCase(),
+        address: draft.address.trim(),
+        phone: draft.phone.trim(),
+        email: draft.email.trim(),
+      }
+      const response = await fetch('/api/management/offices', {
+        method: dialog?.mode === 'edit' ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error('Office could not be saved')
+      setOffices((current) => dialog?.mode === 'edit'
+        ? current.map((office) => office.id === dialog.office.id ? result.office : office)
+        : [result.office, ...current])
+      setDialog(null)
+      toast.success(t.management.officeSaved)
+    } catch {
+      setFormError(t.common.unexpectedError)
+    } finally {
+      setIsSaving(false)
     }
-    setOffices((current) => dialog?.mode === 'edit'
-      ? current.map((office) => office.id === dialog.office.id ? nextOffice : office)
-      : [nextOffice, ...current])
-    setDialog(null)
-    toast.info(t.management.previewChangeNotice)
   }
 
   const selectedDetails = dialog?.mode === 'details' ? dialog.office : null
   const officeEmployees = selectedDetails
-    ? demoManagedUsers.filter((entry) => entry.officeId === selectedDetails.id)
+    ? users.filter((entry) => entry.officeId === selectedDetails.id)
     : []
-  const assignedManager = (office: ManagedOffice) => managers.find((entry) => entry.id === office.managerUserId)
+  const assignedManager = (office: ManagedOffice) => users.find((entry) => entry.id === office.managerUserId)
 
   return (
     <>
@@ -128,13 +169,14 @@ export function OfficeManagementView() {
         title={t.nav.officesBranches}
         description={t.management.officeDescription}
         actions={
-          <Button size="lg" onClick={startCreate}>
+          <Button size="lg" onClick={startCreate} disabled={isLoading}>
             <Plus aria-hidden="true" />
             {t.management.createOffice}
           </Button>
         }
       />
-      <ManagementNotice>{t.management.officeDemoNotice}</ManagementNotice>
+      <ManagementNotice>{t.management.officeLiveNotice}</ManagementNotice>
+      {loadError && <p role="alert" className="text-sm text-destructive">{t.common.unexpectedError}</p>}
 
       <Card>
         <CardContent className="flex flex-col gap-4">
@@ -166,9 +208,11 @@ export function OfficeManagementView() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visibleOffices.map((office) => {
+              {isLoading ? (
+                <TableRow><TableCell colSpan={6} className="py-12 text-center text-sm text-muted-foreground">{t.common.loading}</TableCell></TableRow>
+              ) : visibleOffices.map((office) => {
                 const manager = assignedManager(office)
-                const employeeCount = demoManagedUsers.filter((entry) => entry.officeId === office.id).length
+                const employeeCount = office.employeeCount ?? users.filter((entry) => entry.officeId === office.id && entry.role !== 'admin').length
                 return (
                   <TableRow key={office.id}>
                     <TableCell>
@@ -202,7 +246,7 @@ export function OfficeManagementView() {
                   </TableRow>
                 )
               })}
-              {visibleOffices.length === 0 && (
+              {!isLoading && visibleOffices.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} className="py-12 text-center">
                     <Building2 className="mx-auto mb-2 size-6 text-muted-foreground" aria-hidden="true" />
@@ -220,7 +264,7 @@ export function OfficeManagementView() {
           <form onSubmit={saveDraft} className="flex flex-col gap-5">
             <DialogHeader>
               <DialogTitle>{dialog?.mode === 'edit' ? t.management.editOffice : t.management.createOffice}</DialogTitle>
-              <DialogDescription>{t.management.officeDemoNotice}</DialogDescription>
+              <DialogDescription>{t.management.officeLiveNotice}</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField id="office-name" label={t.management.officeName} required>
@@ -238,12 +282,6 @@ export function OfficeManagementView() {
               <FormField id="office-email" label={t.management.email} required>
                 <Input id="office-email" type="email" dir="ltr" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} />
               </FormField>
-              <FormField id="office-manager" label={t.management.officeManager}>
-                <select id="office-manager" value={draft.managerUserId ?? ''} onChange={(event) => setDraft({ ...draft, managerUserId: event.target.value || null })} className={fieldClass}>
-                  <option value="">{t.management.unassigned}</option>
-                  {managers.map((manager) => <option key={manager.id} value={manager.id}>{manager.fullName} · {manager.email}</option>)}
-                </select>
-              </FormField>
               <FormField id="office-status" label={t.management.status} required>
                 <select id="office-status" value={draft.status} onChange={(event) => {
                   if (event.target.value === 'active' || event.target.value === 'inactive') {
@@ -258,7 +296,7 @@ export function OfficeManagementView() {
             {formError && <p role="alert" className="text-sm text-destructive">{formError}</p>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setDialog(null)}>{t.common.cancel}</Button>
-              <Button type="submit">{t.management.savePreview}</Button>
+              <Button type="submit" disabled={isSaving}>{isSaving ? t.common.saving : t.common.save}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -269,7 +307,7 @@ export function OfficeManagementView() {
           <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle>{selectedDetails.name}</DialogTitle>
-              <DialogDescription>{t.management.demoRecord}</DialogDescription>
+              <DialogDescription>{t.management.liveRecord}</DialogDescription>
             </DialogHeader>
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
               <div>
@@ -282,7 +320,7 @@ export function OfficeManagementView() {
               {[
                 [t.management.phone, selectedDetails.phone],
                 [t.management.email, selectedDetails.email],
-                [t.management.officeManager, assignedManager(selectedDetails)?.fullName ?? t.management.unassigned],
+                [t.management.officeManager, selectedDetails.managerName ?? assignedManager(selectedDetails)?.fullName ?? t.management.unassigned],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-lg border p-3">
                   <dt className="text-xs text-muted-foreground">{label}</dt>
@@ -304,7 +342,7 @@ export function OfficeManagementView() {
                       </Avatar>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-foreground">{employee.fullName}</p>
-                        <p className="truncate text-xs text-muted-foreground">{t.roles[employee.role]} · {employee.email}</p>
+                        <p className="truncate text-xs text-muted-foreground">{employee.role === 'admin' ? t.management.adminRole : t.roles[employee.role]} · {employee.email}</p>
                       </div>
                     </li>
                   ))}

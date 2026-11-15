@@ -1,4 +1,5 @@
 import type { PackageType, ShipmentStatus, ShippingCompany } from '@/types/shipment'
+import type { AccountStatus, UserRole } from '@/types/user'
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
@@ -9,20 +10,103 @@ export interface Database {
         Row: {
           id: string
           full_name: string
-          role: 'admin'
+          role: UserRole
+          office_id: string | null
+          account_status: AccountStatus
           created_at: string
         }
         Insert: {
           id: string
           full_name: string
-          role?: 'admin'
+          role?: UserRole
+          office_id?: string | null
+          account_status?: AccountStatus
           created_at?: string
         }
         Update: {
           id?: string
           full_name?: string
-          role?: 'admin'
+          role?: UserRole
+          office_id?: string | null
+          account_status?: AccountStatus
           created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'profiles_office_id_fkey'
+            columns: ['office_id']
+            isOneToOne: false
+            referencedRelation: 'offices'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      offices: {
+        Row: {
+          id: string
+          name: string
+          code: string
+          address: string
+          phone: string
+          email: string
+          status: AccountStatus
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          code: string
+          address?: string
+          phone?: string
+          email?: string
+          status?: AccountStatus
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          code?: string
+          address?: string
+          phone?: string
+          email?: string
+          status?: AccountStatus
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_invites: {
+        Row: {
+          email: string
+          full_name: string
+          role: UserRole
+          office_id: string | null
+          invited_by: string
+          created_at: string
+          expires_at: string
+          accepted_at: string | null
+        }
+        Insert: {
+          email: string
+          full_name: string
+          role: UserRole
+          office_id?: string | null
+          invited_by: string
+          created_at?: string
+          expires_at?: string
+          accepted_at?: string | null
+        }
+        Update: {
+          email?: string
+          full_name?: string
+          role?: UserRole
+          office_id?: string | null
+          invited_by?: string
+          created_at?: string
+          expires_at?: string
+          accepted_at?: string | null
         }
         Relationships: []
       }
@@ -52,6 +136,7 @@ export interface Database {
           created_at: string
           updated_at: string
           created_by: string | null
+          office_id: string | null
         }
         Insert: {
           id?: string
@@ -78,6 +163,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
           created_by?: string | null
+          office_id?: string | null
         }
         Update: {
           id?: string
@@ -104,6 +190,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
           created_by?: string | null
+          office_id?: string | null
         }
         Relationships: []
       }
@@ -196,6 +283,23 @@ export interface Database {
         }
         Returns: string
       }
+      can_access_office: {
+        Args: { p_office_id: string }
+        Returns: boolean
+      }
+      is_office_manager_for: {
+        Args: { p_office_id: string }
+        Returns: boolean
+      }
+      warehouse_update_shipment_status: {
+        Args: {
+          p_shipment_id: string
+          p_status: ShipmentStatus
+          p_location: string | null
+          p_note: string | null
+        }
+        Returns: string
+      }
       get_shipment_stats: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -235,7 +339,7 @@ export interface Database {
       }
     }
     Enums: {
-      app_role: 'admin'
+      app_role: UserRole
       shipment_status: ShipmentStatus
       package_type: PackageType
       shipping_company: ShippingCompany
