@@ -23,6 +23,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { useLanguage } from '@/contexts/language-context'
 import type { ManagedOffice, ManagedUser } from '@/data/demo-management-data'
 import { formatDate, initials } from '@/lib/format'
+import { managementErrorMessage } from '@/lib/management-error-message'
 import { isValidEmail } from '@/lib/validation'
 import { isUserRole, USER_ROLES, type AccountStatus } from '@/types/user'
 
@@ -49,7 +50,7 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
   const [users, setUsers] = useState<ManagedUser[]>([])
   const [offices, setOffices] = useState<ManagedOffice[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [loadError, setLoadError] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<FilterValue>('all')
@@ -80,12 +81,17 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
           usersResponse.json(),
           officesResponse.json(),
         ])
-        if (!usersResponse.ok || !officesResponse.ok) throw new Error('Management data could not be loaded')
+        if (!usersResponse.ok) {
+          throw new Error(typeof usersResult.error === 'string' ? usersResult.error : 'request_failed')
+        }
+        if (!officesResponse.ok) {
+          throw new Error(typeof officesResult.error === 'string' ? officesResult.error : 'request_failed')
+        }
         if (!active) return
         setUsers(usersResult.users)
         setOffices(officesResult.offices)
-      } catch {
-        if (active) setLoadError(true)
+      } catch (error) {
+        if (active) setLoadError(error instanceof Error ? error.message : null)
       } finally {
         if (active) setIsLoading(false)
       }
@@ -171,7 +177,7 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
         body: JSON.stringify(body),
       })
       const result = await response.json()
-      if (!response.ok) throw new Error('User could not be saved')
+      if (!response.ok) throw new Error(typeof result.error === 'string' ? result.error : 'request_failed')
       if (dialog?.mode === 'edit') {
         setUsers((current) => current.map((entry) => entry.id === result.user.id ? result.user : entry))
       } else {
@@ -179,8 +185,8 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
       }
       setDialog(null)
       toast.success(dialog?.mode === 'create' ? t.management.inviteSent : t.management.userSaved)
-    } catch {
-      setFormError(t.common.unexpectedError)
+    } catch (error) {
+      setFormError(managementErrorMessage(error instanceof Error ? error.message : null, t.management.errors))
     } finally {
       setIsSaving(false)
     }
@@ -207,12 +213,12 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
         body: JSON.stringify(body),
       })
       const result = await response.json()
-      if (!response.ok) throw new Error('User status could not be changed')
+      if (!response.ok) throw new Error(typeof result.error === 'string' ? result.error : 'request_failed')
       setUsers((current) => current.map((entry) => entry.id === result.user.id ? result.user : entry))
       setDeactivatingUser(null)
       toast.success(t.management.userSaved)
-    } catch {
-      setLoadError(true)
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : null)
     } finally {
       setIsSaving(false)
     }
@@ -247,7 +253,7 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
         }
       />
       <ManagementNotice>{t.management.userLiveNotice}</ManagementNotice>
-      {loadError && <p role="alert" className="text-sm text-destructive">{t.common.unexpectedError}</p>}
+      {loadError && <p role="alert" className="text-sm text-destructive">{managementErrorMessage(loadError, t.management.errors)}</p>}
 
       <Card>
         <CardContent className="flex flex-col gap-4">

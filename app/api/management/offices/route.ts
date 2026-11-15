@@ -1,4 +1,5 @@
 import { getManagementContext } from '@/lib/server/management-context'
+import { managementDatabaseError } from '@/lib/server/management-errors'
 import type { AccountStatus } from '@/types/user'
 
 type OfficeDraft = {
@@ -56,7 +57,9 @@ export async function GET() {
     .order('name', { ascending: true })
   if (actor.role === 'office_manager') officeQuery = officeQuery.eq('id', actor.officeId)
   const { data: offices, error: officesError } = await officeQuery
-  if (officesError) return Response.json({ error: 'office_list_failed' }, { status: 500 })
+  if (officesError) {
+    return Response.json({ error: managementDatabaseError(officesError, 'office_list_failed') }, { status: 500 })
+  }
 
   const officeIds = offices.map((office) => office.id)
   if (officeIds.length === 0) return Response.json({ offices: [] })
@@ -68,8 +71,11 @@ export async function GET() {
       .in('office_id', officeIds),
     adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 }),
   ])
-  if (profilesError || authError) {
-    return Response.json({ error: 'office_members_lookup_failed' }, { status: 500 })
+  if (profilesError) {
+    return Response.json({ error: managementDatabaseError(profilesError, 'office_members_lookup_failed') }, { status: 500 })
+  }
+  if (authError) {
+    return Response.json({ error: managementDatabaseError(authError, 'service_role_key_invalid') }, { status: 500 })
   }
 
   const profileGroups = new Map<string, typeof profiles>()
@@ -120,6 +126,9 @@ export async function POST(request: Request) {
     .select('id, name, code, address, phone, email, status, created_at, updated_at')
     .single()
   if (error) {
+    if (error.code !== '23505') {
+      return Response.json({ error: managementDatabaseError(error, 'office_create_failed') }, { status: 500 })
+    }
     const status = error.code === '23505' ? 409 : 500
     return Response.json({ error: status === 409 ? 'office_code_already_exists' : 'office_create_failed' }, { status })
   }
@@ -162,6 +171,9 @@ export async function PATCH(request: Request) {
     .select('id, name, code, address, phone, email, status, created_at, updated_at')
     .maybeSingle()
   if (error) {
+    if (error.code !== '23505') {
+      return Response.json({ error: managementDatabaseError(error, 'office_update_failed') }, { status: 500 })
+    }
     const status = error.code === '23505' ? 409 : 500
     return Response.json({ error: status === 409 ? 'office_code_already_exists' : 'office_update_failed' }, { status })
   }
@@ -171,7 +183,9 @@ export async function PATCH(request: Request) {
     .from('profiles')
     .select('id, full_name, role, office_id')
     .eq('office_id', office.id)
-  if (membersError) return Response.json({ error: 'office_members_lookup_failed' }, { status: 500 })
+  if (membersError) {
+    return Response.json({ error: managementDatabaseError(membersError, 'office_members_lookup_failed') }, { status: 500 })
+  }
   const manager = members.find((member) => member.role === 'office_manager')
 
   return Response.json({

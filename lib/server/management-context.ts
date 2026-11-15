@@ -1,6 +1,7 @@
 import 'server-only'
 import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { isSchemaMigrationError } from '@/lib/server/management-errors'
 import type { Database } from '@/types/database'
 import { isUserRole } from '@/types/user'
 
@@ -24,7 +25,8 @@ export async function getManagementContext() {
     .maybeSingle()
 
   if (profileError) {
-    return { response: Response.json({ error: 'profile_lookup_failed' }, { status: 500 }) } as const
+    const error = isSchemaMigrationError(profileError) ? 'rbac_migration_required' : 'profile_lookup_failed'
+    return { response: Response.json({ error }, { status: 500 }) } as const
   }
   if (!profile || profile.account_status !== 'active' || !isUserRole(profile.role)) {
     return { response: Response.json({ error: 'forbidden' }, { status: 403 }) } as const
@@ -44,7 +46,8 @@ export async function getManagementContext() {
       .eq('id', profile.office_id)
       .maybeSingle()
     if (officeError) {
-      return { response: Response.json({ error: 'office_lookup_failed' }, { status: 500 }) } as const
+      const error = isSchemaMigrationError(officeError) ? 'rbac_migration_required' : 'office_lookup_failed'
+      return { response: Response.json({ error }, { status: 500 }) } as const
     }
     if (office?.status !== 'active') {
       return { response: Response.json({ error: 'office_inactive' }, { status: 403 }) } as const

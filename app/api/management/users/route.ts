@@ -1,4 +1,5 @@
 import { getManagementContext } from '@/lib/server/management-context'
+import { managementDatabaseError } from '@/lib/server/management-errors'
 import { isValidEmail } from '@/lib/validation'
 import { USER_ROLES, type AccountStatus, type UserRole } from '@/types/user'
 
@@ -43,8 +44,11 @@ export async function GET() {
     profileQuery,
     adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 }),
   ])
-  if (profilesError || authError) {
-    return Response.json({ error: 'user_list_failed' }, { status: 500 })
+  if (profilesError) {
+    return Response.json({ error: managementDatabaseError(profilesError, 'user_list_failed') }, { status: 500 })
+  }
+  if (authError) {
+    return Response.json({ error: managementDatabaseError(authError, 'service_role_key_invalid') }, { status: 500 })
   }
 
   const authById = new Map(authUsers.users.map((authUser) => [authUser.id, authUser]))
@@ -126,12 +130,16 @@ export async function POST(request: Request) {
       invited_by: actor.id,
     })
   if (inviteInsertError) {
+    if (inviteInsertError.code !== '23505') {
+      return Response.json({ error: managementDatabaseError(inviteInsertError, 'invite_record_failed') }, { status: 500 })
+    }
     const status = inviteInsertError.code === '23505' ? 409 : 500
     return Response.json({ error: status === 409 ? 'email_already_invited' : 'invite_record_failed' }, { status })
   }
 
   const { data: invitation, error: authInviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
     data: { full_name: fullName },
+    redirectTo: new URL('/auth/callback?next=/invite/complete', request.url).toString(),
   })
   if (authInviteError || !invitation.user) {
     const { error: cleanupError } = await adminClient
@@ -192,7 +200,9 @@ export async function PATCH(request: Request) {
     .select('id, full_name, role, office_id, account_status')
     .eq('id', body.id)
     .maybeSingle()
-  if (targetError) return Response.json({ error: 'user_lookup_failed' }, { status: 500 })
+  if (targetError) {
+    return Response.json({ error: managementDatabaseError(targetError, 'user_lookup_failed') }, { status: 500 })
+  }
   if (!target) return Response.json({ error: 'user_not_found' }, { status: 404 })
 
   if (actor.role === 'office_manager') {
@@ -245,7 +255,9 @@ export async function PATCH(request: Request) {
       .select('id', { count: 'exact', head: true })
       .eq('role', 'admin')
       .eq('account_status', 'active')
-    if (adminCountError) return Response.json({ error: 'admin_count_failed' }, { status: 500 })
+    if (adminCountError) {
+      return Response.json({ error: managementDatabaseError(adminCountError, 'admin_count_failed') }, { status: 500 })
+    }
     if ((count ?? 0) <= 1) return Response.json({ error: 'cannot_disable_last_admin' }, { status: 409 })
   }
 
@@ -270,7 +282,9 @@ export async function PATCH(request: Request) {
     .eq('id', target.id)
     .select('id, full_name, role, office_id, account_status, created_at')
     .single()
-  if (updateError) return Response.json({ error: 'profile_update_failed' }, { status: 500 })
+  if (updateError) {
+    return Response.json({ error: managementDatabaseError(updateError, 'profile_update_failed') }, { status: 500 })
+  }
 
   const { error: metadataError } = await adminClient.auth.admin.updateUserById(target.id, {
     user_metadata: { ...authUser.user.user_metadata, full_name: fullName },

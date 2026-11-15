@@ -16,8 +16,16 @@ The app has no public sign-up page. Create the initial administrator from Supaba
    insert into public.admin_allowlist (email) values (lower(btrim('admin@example.com')));
    ```
 
-5. In **Authentication → Settings**, turn off public sign-ups. The allowlist is for initial administrator provisioning; later invitations are created from the authenticated management UI.
-6. For a new database only, in **Authentication → Users**, create or invite the approved initial administrator and set a strong password. Existing migrated projects should keep their current administrator accounts.
+5. In **Authentication → URL Configuration**, set the Site URL to your app origin and add these Redirect URLs:
+
+   ```text
+   http://localhost:3000/auth/callback
+   https://your-production-domain/auth/callback
+   ```
+
+   Add any preview callback URLs you use. Keep the Supabase invitation email template's confirmation link intact; the application supplies the callback redirect when sending invitations.
+6. In **Authentication → Settings**, turn off public sign-ups. The allowlist is for initial administrator provisioning; later invitations are created from the authenticated management UI.
+7. For a new database only, in **Authentication → Users**, create or invite the approved initial administrator and set a strong password. Existing migrated projects should keep their current administrator accounts.
 
 The RBAC migration adds the only supported roles—`admin`, `office_manager`, and `storekeeper`—along with office assignments, account status, invitation records, and office-scoped shipment row policies. Existing profiles remain Admins. Existing shipments are left unassigned (`office_id` is null), so an Admin must assign them before office users can access them. The Auth trigger provisions invited accounts with the role and office recorded by the server-side invite flow.
 
@@ -39,7 +47,7 @@ SUPABASE_SERVICE_ROLE_KEY=your-server-only-service-role-key
 
 The publishable key may be used in the browser. `SUPABASE_SERVICE_ROLE_KEY` is only for Next.js server-side management routes; never prefix it with `NEXT_PUBLIC_`, expose it to client code, or commit a real key.
 
-New users are invited by an Admin from User Management. Office Managers may invite Storekeepers only for their own office. Account roles, assignments, and active status are validated by the server and protected by database policies.
+New users are invited by an Admin from User Management. The invitation link returns to `/auth/callback`, establishes the Supabase session, and opens `/invite/complete` so the user can set a password. Office Managers may invite Storekeepers only for their own office. Account roles, assignments, and active status are validated by the server and protected by database policies.
 
 Run the app with `pnpm dev`, then sign in at `/login` using the administrator credentials created above. There is intentionally no demo-login or public registration path.
 

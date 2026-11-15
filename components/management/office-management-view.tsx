@@ -22,6 +22,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useLanguage } from '@/contexts/language-context'
 import { type ManagedOffice, type ManagedUser } from '@/data/demo-management-data'
 import { initials } from '@/lib/format'
+import { managementErrorMessage } from '@/lib/management-error-message'
 import { type AccountStatus } from '@/types/user'
 
 type OfficeDraft = Pick<ManagedOffice, 'name' | 'code' | 'address' | 'phone' | 'email' | 'status'>
@@ -45,7 +46,7 @@ export function OfficeManagementView() {
   const [offices, setOffices] = useState<ManagedOffice[]>([])
   const [users, setUsers] = useState<ManagedUser[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [loadError, setLoadError] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -76,8 +77,8 @@ export function OfficeManagementView() {
         if (!active) return
         setOffices(officesResult.offices)
         setUsers(usersResult.users)
-      } catch {
-        if (active) setLoadError(true)
+      } catch (error) {
+        if (active) setLoadError(error instanceof Error ? error.message : null)
       } finally {
         if (active) setIsLoading(false)
       }
@@ -144,14 +145,14 @@ export function OfficeManagementView() {
         body: JSON.stringify(requestBody),
       })
       const result = await response.json()
-      if (!response.ok) throw new Error('Office could not be saved')
+      if (!response.ok) throw new Error(typeof result.error === 'string' ? result.error : 'request_failed')
       setOffices((current) => dialog?.mode === 'edit'
         ? current.map((office) => office.id === dialog.office.id ? result.office : office)
         : [result.office, ...current])
       setDialog(null)
       toast.success(t.management.officeSaved)
-    } catch {
-      setFormError(t.common.unexpectedError)
+    } catch (error) {
+      setFormError(managementErrorMessage(error instanceof Error ? error.message : null, t.management.errors))
     } finally {
       setIsSaving(false)
     }
@@ -176,7 +177,7 @@ export function OfficeManagementView() {
         }
       />
       <ManagementNotice>{t.management.officeLiveNotice}</ManagementNotice>
-      {loadError && <p role="alert" className="text-sm text-destructive">{t.common.unexpectedError}</p>}
+      {loadError && <p role="alert" className="text-sm text-destructive">{managementErrorMessage(loadError, t.management.errors)}</p>}
 
       <Card>
         <CardContent className="flex flex-col gap-4">
