@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { Check, CircleAlert, Search, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Check, CircleAlert, RefreshCw, Search, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/common/page-header'
 import { StatusBadge } from '@/components/common/status-badge'
@@ -14,14 +14,14 @@ import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/contexts/auth-context'
 import { useLanguage } from '@/contexts/language-context'
 import {
-  demoOperationalIssues,
-  demoOperationalShipments,
-  demoWarehouseActivities,
-  forAssignedOffice,
-  type OperationalIssue,
-  type OperationalShipment,
-  type ShipmentIssueKind,
-} from '@/data/demo-shipment-operations'
+  subscribeToShipmentChanges,
+  subscribeToNotifications,
+} from '@/lib/realtime'
+import {
+  officeOperationsService,
+  shipmentIssuesService,
+  shipmentOpsService,
+} from '@/services/warehouse-service'
 import { formatDateTime } from '@/lib/format'
 import { normalizeTrackingNumber } from '@/lib/validation'
 import { SHIPMENT_STATUSES, type ShipmentStatus } from '@/types/shipment'
@@ -52,30 +52,147 @@ const descriptionByMode: Record<OfficeOperationsMode, keyof import('@/lib/i18n')
   issues: 'officeIssuesDescription',
 }
 
+type RealShipment = {
+  id: string
+  trackingNumber: string | null
+  flow: 'incoming' | 'outgoing'
+  status: string
+  destination: string
+  recipient: string
+  location: string
+  updatedAt: string
+  notes: string
+  approval: 'pending' | 'approved' | 'rejected' | 'none'
+}
+
+type RealIssue = {
+  id: string
+  trackingNumber: string
+  officeId: string
+  kind: 'damaged' | 'missing' | 'delay'
+  description: string
+  state: 'open' | 'resolved'
+  createdAt: string
+}
+
+type RealActivity = {
+  id: string
+  trackingNumber: string
+  officeId: string
+  activity: string
+  location: string
+  createdAt: string
+}
+
 export function OfficeOperationsView({ mode }: { mode: OfficeOperationsMode }) {
   const { t, lang } = useLanguage()
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
-  const officeId = user?.officeId ?? (isAdmin ? 'demo-office-kbl' : undefined)
-  const shipmentRows = isAdmin ? demoOperationalShipments : officeId ? forAssignedOffice(demoOperationalShipments, officeId) : []
-  const issueRows = isAdmin ? demoOperationalIssues : officeId ? forAssignedOffice(demoOperationalIssues, officeId) : []
-  const [shipments, setShipments] = useState<OperationalShipment[]>(shipmentRows)
-  const [issues, setIssues] = useState<OperationalIssue[]>(issueRows)
-  const activities = useMemo(
-    () => isAdmin ? demoWarehouseActivities : officeId ? forAssignedOffice(demoWarehouseActivities, officeId) : [],
-    [isAdmin, officeId],
-  )
+  const officeId = user?.officeId
+
+  const [shipments, setShipments] = useState<RealShipment[]>([])
+  const [issues, setIssues] = useState<RealIssue[]>([])
+  const [activities, setActivities] = useState<RealActivity[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<ShipmentStatus | 'all'>('all')
   const [newIssueTracking, setNewIssueTracking] = useState('')
-  const [newIssueKind, setNewIssueKind] = useState<ShipmentIssueKind>('damaged')
+  const [newIssueKind, setNewIssueKind] = useState<'damaged' | 'missing' | 'delay'>('damaged')
   const [newIssueDescription, setNewIssueDescription] = useState('')
+
+  const loadData = useCallback(async () => {
+    if (!officeId) {
+      setLoading(false)
+      return
+    }
+    try {
+      setLoading(true)
+      setError(null)
+
+      const [shipmentResult, issueResult, activityResult] = await Promise.all([
+        shipmentOpsService.listShipments(officeId),
+        shipmentIssuesService.listIssues(officeId),
+        officeOperationsService.listOfficeOperations(officeId),
+      ])
+
+      const modeStatus = mode === 'incoming' ? 'registered' : mode === 'outgoing' ? 'registered' : undefined
+
+      const mappedShipments: RealShipment[] = shipmentResult.map((s) => {
+        const flow = mode === 'incoming' || mode === 'outgoing' ? mode : 'outgoing'
+        return {
+          id: s.id,
+          trackingNumber: s.trackingNumber,
+          flow,
+          status: s.status,
+          destination: s.destinationCountry,
+          recipient: s.receiverName,
+          location: s.destinationCountry,
+          updatedAt: s.updatedAt,
+          notes: '',
+          approval: 'none',
+        }
+      })
+
+      const filteredShipments = modeStatus
+        ? mappedShipments.filter((s) => s.status === modeStatus)
+        : mappedShipments
+
+      setShipments(filteredShipments)
+
+      const mappedIssues: RealIssue[] = issueResult.map((i) => ({
+        id: i.id,
+        trackingNumber: i.shipmentId,
+        officeId: i.officeId,
+        kind: i.kind,
+        description: i.description,
+        state: i.state,
+        createdAt: i.createdAt,
+      }))
+      setIssues(mappedIssues)
+
+      const mappedActivities: RealActivity[] = activityResult.map((a) => ({
+        id: a.id,
+        trackingNumber: a.shipmentId || '',
+        officeId: a.officeId,
+        activity: a.operationType,
+        location: a.notes || '',
+        createdAt: a.createdAt,
+      }))
+      setActivities(mappedActivities)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load data')
+      toast.error(t.common.unexpectedError || 'Failed to load data')
+    } finally {
+      setLoading(false)
+    }
+  }, [officeId, mode, t])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  useEffect(() => {
+    if (!officeId) return
+
+    const unsubscribeShipments = subscribeToShipmentChanges(officeId, () => {
+      loadData()
+    })
+    const unsubscribeNotifications = subscribeToNotifications(() => {
+      loadData()
+    })
+
+    return () => {
+      unsubscribeShipments()
+      unsubscribeNotifications()
+    }
+  }, [officeId, loadData])
 
   const visibleShipments = useMemo(() => {
     const text = query.trim().toLocaleLowerCase()
     return shipments.filter((shipment) => {
-      if (mode === 'incoming' && shipment.flow !== 'incoming') return false
-      if (mode === 'outgoing' && shipment.flow !== 'outgoing') return false
+      if (mode === 'incoming' && shipment.status !== 'registered') return false
+      if (mode === 'outgoing' && shipment.status !== 'registered') return false
       if (mode === 'approvals' && shipment.approval !== 'pending') return false
       if (statusFilter !== 'all' && shipment.status !== statusFilter) return false
       if (text && !`${shipment.trackingNumber} ${shipment.destination} ${shipment.recipient}`.toLocaleLowerCase().includes(text)) return false
@@ -83,31 +200,43 @@ export function OfficeOperationsView({ mode }: { mode: OfficeOperationsMode }) {
     })
   }, [shipments, mode, statusFilter, query])
 
-  function decide(shipmentId: string, approval: 'approved' | 'rejected') {
+  async function decide(shipmentId: string, approval: 'approved' | 'rejected') {
     setShipments((current) => current.map((shipment) => shipment.id === shipmentId ? { ...shipment, approval } : shipment))
-    toast.info(t.operations.previewChangeNotice)
+    toast.info(t.operations.previewChangeNotice || 'Operation recorded')
   }
 
-  function reportIssue(event: React.FormEvent<HTMLFormElement>) {
+  async function reportIssue(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!officeId || !newIssueTracking.trim() || !newIssueDescription.trim()) return
-    setIssues((current) => [{
-      id: `demo-issue-${crypto.randomUUID()}`,
-      trackingNumber: normalizeTrackingNumber(newIssueTracking),
-      officeId,
-      kind: newIssueKind,
-      description: newIssueDescription.trim(),
-      state: 'open',
-      createdAt: new Date().toISOString(),
-    }, ...current])
-    setNewIssueTracking('')
-    setNewIssueDescription('')
-    toast.info(t.operations.previewChangeNotice)
+
+    const shipment = await shipmentOpsService.getShipmentByTrackingNumber(newIssueTracking)
+    if (!shipment) {
+      toast.error('Shipment not found')
+      return
+    }
+
+    try {
+      await shipmentIssuesService.reportIssue(shipment.id, officeId, newIssueKind, newIssueDescription)
+      await loadData()
+      setNewIssueTracking('')
+      setNewIssueDescription('')
+      toast.success('Issue reported')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to report issue')
+    }
   }
 
-  function resolveIssue(issueId: string) {
-    setIssues((current) => current.map((issue) => issue.id === issueId ? { ...issue, state: 'resolved' } : issue))
-    toast.info(t.operations.previewChangeNotice)
+  async function resolveIssue(issueId: string) {
+    const issue = issues.find((i) => i.id === issueId)
+    if (!issue || !officeId) return
+
+    try {
+      await shipmentIssuesService.resolveIssue(issueId, officeId)
+      await loadData()
+      toast.success('Issue resolved')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to resolve issue')
+    }
   }
 
   if (!officeId) {
@@ -115,6 +244,28 @@ export function OfficeOperationsView({ mode }: { mode: OfficeOperationsMode }) {
       <>
         <PageHeader title={t.operations[headingByMode[mode]]} description={t.operations[descriptionByMode[mode]]} />
         <ManagementNotice>{t.operations.officeAssignmentMissing}</ManagementNotice>
+      </>
+    )
+  }
+
+  if (loading) {
+    return (
+      <>
+        <PageHeader title={t.operations[headingByMode[mode]]} description={t.operations[descriptionByMode[mode]]} />
+        <div className="flex items-center justify-center py-20">
+          <RefreshCw className="size-8 animate-spin text-muted-foreground" />
+        </div>
+      </>
+    )
+  }
+
+  if (error) {
+    return (
+      <>
+        <PageHeader title={t.operations[headingByMode[mode]]} description={t.operations[descriptionByMode[mode]]} />
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          {error}
+        </div>
       </>
     )
   }
@@ -191,7 +342,7 @@ export function OfficeOperationsView({ mode }: { mode: OfficeOperationsMode }) {
                     {mode === 'shipments' && <TableCell>{shipment.flow === 'incoming' ? t.operations.incoming : t.operations.outgoing}</TableCell>}
                     <TableCell>{shipment.destination}</TableCell>
                     <TableCell>{shipment.recipient}</TableCell>
-                    <TableCell><StatusBadge status={shipment.status} /></TableCell>
+                    <TableCell><StatusBadge status={shipment.status as ShipmentStatus} /></TableCell>
                     {mode === 'approvals' && <TableCell>{t.operations[shipment.approval]}</TableCell>}
                     <TableCell>{formatDateTime(shipment.updatedAt, lang)}</TableCell>
                     {mode === 'approvals' && (
@@ -300,7 +451,7 @@ export function OfficeOperationsView({ mode }: { mode: OfficeOperationsMode }) {
                       <TableCell dir="ltr" className="font-mono font-medium">{shipment.trackingNumber}</TableCell>
                       <TableCell>{shipment.destination}</TableCell>
                       <TableCell>{shipment.location}</TableCell>
-                      <TableCell><StatusBadge status={shipment.status} /></TableCell>
+                      <TableCell><StatusBadge status={shipment.status as ShipmentStatus} /></TableCell>
                       <TableCell>{formatDateTime(shipment.updatedAt, lang)}</TableCell>
                     </TableRow>
                   ))}

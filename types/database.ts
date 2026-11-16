@@ -3,6 +3,12 @@ import type { AccountStatus, UserRole } from '@/types/user'
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
+export type WarehouseOperationType = 'receive' | 'dispatch' | 'storage_record' | 'transfer_out' | 'transfer_in' | 'status_update'
+export type OfficeOperationType = 'incoming' | 'outgoing' | 'transfer' | 'handover' | 'status_change'
+export type IssueKind = 'damaged' | 'missing' | 'delay'
+export type IssueState = 'open' | 'resolved'
+export type TransferState = 'in_transit' | 'received'
+
 export interface Database {
   public: {
     Tables: {
@@ -224,6 +230,496 @@ export interface Database {
         }
         Relationships: []
       }
+      warehouses: {
+        Row: {
+          id: string
+          name: string
+          code: string
+          office_id: string
+          address: string
+          phone: string
+          email: string
+          status: AccountStatus
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          code: string
+          office_id: string
+          address?: string
+          phone?: string
+          email?: string
+          status?: AccountStatus
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          code?: string
+          office_id?: string
+          address?: string
+          phone?: string
+          email?: string
+          status?: AccountStatus
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'warehouses_office_id_fkey'
+            columns: ['office_id']
+            isOneToOne: false
+            referencedRelation: 'offices'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      warehouse_operations: {
+        Row: {
+          id: string
+          shipment_id: string
+          warehouse_id: string
+          office_id: string
+          operation_type: WarehouseOperationType
+          previous_status: ShipmentStatus | null
+          new_status: ShipmentStatus
+          location: string | null
+          notes: string | null
+          created_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          shipment_id: string
+          warehouse_id: string
+          office_id: string
+          operation_type: WarehouseOperationType
+          previous_status?: ShipmentStatus | null
+          new_status: ShipmentStatus
+          location?: string | null
+          notes?: string | null
+          created_by: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          shipment_id?: string
+          warehouse_id?: string
+          office_id?: string
+          operation_type?: WarehouseOperationType
+          previous_status?: ShipmentStatus | null
+          new_status?: ShipmentStatus
+          location?: string | null
+          notes?: string | null
+          created_by?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'warehouse_operations_shipment_id_fkey'
+            columns: ['shipment_id']
+            isOneToOne: false
+            referencedRelation: 'shipments'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'warehouse_operations_warehouse_id_fkey'
+            columns: ['warehouse_id']
+            isOneToOne: false
+            referencedRelation: 'warehouses'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'warehouse_operations_office_id_fkey'
+            columns: ['office_id']
+            isOneToOne: false
+            referencedRelation: 'offices'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'warehouse_operations_created_by_fkey'
+            columns: ['created_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      office_operations: {
+        Row: {
+          id: string
+          shipment_id: string | null
+          source_office_id: string | null
+          destination_office_id: string | null
+          office_id: string
+          operation_type: OfficeOperationType
+          previous_status: ShipmentStatus | null
+          new_status: ShipmentStatus | null
+          notes: string | null
+          created_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          shipment_id?: string | null
+          source_office_id?: string | null
+          destination_office_id?: string | null
+          office_id: string
+          operation_type: OfficeOperationType
+          previous_status?: ShipmentStatus | null
+          new_status?: ShipmentStatus | null
+          notes?: string | null
+          created_by: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          shipment_id?: string | null
+          source_office_id?: string | null
+          destination_office_id?: string | null
+          office_id?: string
+          operation_type?: OfficeOperationType
+          previous_status?: ShipmentStatus | null
+          new_status?: ShipmentStatus | null
+          notes?: string | null
+          created_by?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'office_operations_shipment_id_fkey'
+            columns: ['shipment_id']
+            isOneToOne: false
+            referencedRelation: 'shipments'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'office_operations_source_office_id_fkey'
+            columns: ['source_office_id']
+            isOneToOne: false
+            referencedRelation: 'offices'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'office_operations_destination_office_id_fkey'
+            columns: ['destination_office_id']
+            isOneToOne: false
+            referencedRelation: 'offices'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'office_operations_office_id_fkey'
+            columns: ['office_id']
+            isOneToOne: false
+            referencedRelation: 'offices'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'office_operations_created_by_fkey'
+            columns: ['created_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      audit_logs: {
+        Row: {
+          id: string
+          actor_id: string
+          action: string
+          entity_type: string
+          entity_id: string
+          office_id: string | null
+          previous_values: Json | null
+          new_values: Json | null
+          metadata: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          actor_id: string
+          action: string
+          entity_type: string
+          entity_id: string
+          office_id?: string | null
+          previous_values?: Json | null
+          new_values?: Json | null
+          metadata?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          actor_id?: string
+          action?: string
+          entity_type?: string
+          entity_id?: string
+          office_id?: string | null
+          previous_values?: Json | null
+          new_values?: Json | null
+          metadata?: Json | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'audit_logs_actor_id_fkey'
+            columns: ['actor_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'audit_logs_office_id_fkey'
+            columns: ['office_id']
+            isOneToOne: false
+            referencedRelation: 'offices'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      shipment_issues: {
+        Row: {
+          id: string
+          shipment_id: string
+          office_id: string
+          kind: IssueKind
+          description: string
+          state: IssueState
+          created_by: string
+          resolved_by: string | null
+          created_at: string
+          resolved_at: string | null
+        }
+        Insert: {
+          id?: string
+          shipment_id: string
+          office_id: string
+          kind: IssueKind
+          description: string
+          state?: IssueState
+          created_by: string
+          resolved_by?: string | null
+          created_at?: string
+          resolved_at?: string | null
+        }
+        Update: {
+          id?: string
+          shipment_id?: string
+          office_id?: string
+          kind?: IssueKind
+          description?: string
+          state?: IssueState
+          created_by?: string
+          resolved_by?: string | null
+          created_at?: string
+          resolved_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'shipment_issues_shipment_id_fkey'
+            columns: ['shipment_id']
+            isOneToOne: false
+            referencedRelation: 'shipments'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'shipment_issues_office_id_fkey'
+            columns: ['office_id']
+            isOneToOne: false
+            referencedRelation: 'offices'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'shipment_issues_created_by_fkey'
+            columns: ['created_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'shipment_issues_resolved_by_fkey'
+            columns: ['resolved_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      shipment_transfers: {
+        Row: {
+          id: string
+          shipment_id: string
+          source_office_id: string
+          destination_office_id: string
+          office_id: string
+          state: TransferState
+          note: string | null
+          created_by: string
+          received_by: string | null
+          created_at: string
+          received_at: string | null
+        }
+        Insert: {
+          id?: string
+          shipment_id: string
+          source_office_id: string
+          destination_office_id: string
+          office_id: string
+          state?: TransferState
+          note?: string | null
+          created_by: string
+          received_by?: string | null
+          created_at?: string
+          received_at?: string | null
+        }
+        Update: {
+          id?: string
+          shipment_id?: string
+          source_office_id?: string
+          destination_office_id?: string
+          office_id?: string
+          state?: TransferState
+          note?: string | null
+          created_by?: string
+          received_by?: string | null
+          created_at?: string
+          received_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'shipment_transfers_shipment_id_fkey'
+            columns: ['shipment_id']
+            isOneToOne: false
+            referencedRelation: 'shipments'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'shipment_transfers_source_office_id_fkey'
+            columns: ['source_office_id']
+            isOneToOne: false
+            referencedRelation: 'offices'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'shipment_transfers_destination_office_id_fkey'
+            columns: ['destination_office_id']
+            isOneToOne: false
+            referencedRelation: 'offices'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'shipment_transfers_office_id_fkey'
+            columns: ['office_id']
+            isOneToOne: false
+            referencedRelation: 'offices'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'shipment_transfers_created_by_fkey'
+            columns: ['created_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'shipment_transfers_received_by_fkey'
+            columns: ['received_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          id: string
+          user_id: string
+          type: string
+          title: string
+          message: string
+          entity_type: string | null
+          entity_id: string | null
+          office_id: string | null
+          priority: string
+          is_read: boolean
+          read_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          type: string
+          title: string
+          message: string
+          entity_type?: string | null
+          entity_id?: string | null
+          office_id?: string | null
+          priority?: string
+          is_read?: boolean
+          read_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          type?: string
+          title?: string
+          message?: string
+          entity_type?: string | null
+          entity_id?: string | null
+          office_id?: string | null
+          priority?: string
+          is_read?: boolean
+          read_at?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      financial_transactions: {
+        Row: {
+          id: string
+          office_id: string
+          type: string
+          category: string
+          amount: number
+          currency: string
+          description: string
+          reference_type: string | null
+          reference_id: string | null
+          created_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          office_id: string
+          type: string
+          category: string
+          amount: number
+          currency: string
+          description: string
+          reference_type?: string | null
+          reference_id?: string | null
+          created_by: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          office_id?: string
+          type?: string
+          category?: string
+          amount?: number
+          currency?: string
+          description?: string
+          reference_type?: string | null
+          reference_id?: string | null
+          created_by?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: {
@@ -337,12 +833,133 @@ export interface Database {
           }[]
         }[]
       }
+      warehouse_receive_shipment: {
+        Args: {
+          p_shipment_id: string
+          p_warehouse_id: string
+          p_location: string
+          p_note: string
+        }
+        Returns: string
+      }
+      warehouse_dispatch_shipment: {
+        Args: {
+          p_shipment_id: string
+          p_warehouse_id: string
+          p_location: string
+          p_note: string
+        }
+        Returns: string
+      }
+      warehouse_record_storage_location: {
+        Args: {
+          p_shipment_id: string
+          p_warehouse_id: string
+          p_location: string
+          p_note: string
+        }
+        Returns: string
+      }
+      office_register_incoming: {
+        Args: {
+          p_shipment_id: string
+          p_office_id: string
+          p_note: string
+        }
+        Returns: string
+      }
+      office_register_outgoing: {
+        Args: {
+          p_shipment_id: string
+          p_office_id: string
+          p_destination_office_id: string
+          p_note: string
+        }
+        Returns: string
+      }
+      office_transfer_shipment: {
+        Args: {
+          p_shipment_id: string
+          p_source_office_id: string
+          p_destination_office_id: string
+          p_note: string
+        }
+        Returns: string
+      }
+      office_record_handover: {
+        Args: {
+          p_shipment_id: string
+          p_source_office_id: string
+          p_destination_office_id: string
+          p_note: string
+        }
+        Returns: string
+      }
+      report_shipment_issue: {
+        Args: {
+          p_shipment_id: string
+          p_office_id: string
+          p_kind: IssueKind
+          p_description: string
+        }
+        Returns: string
+      }
+      resolve_shipment_issue: {
+        Args: {
+          p_issue_id: string
+          p_office_id: string
+        }
+        Returns: string
+      }
+      record_audit_log: {
+        Args: {
+          p_actor_id: string
+          p_action: string
+          p_entity_type: string
+          p_entity_id: string
+          p_office_id: string | null
+          p_previous_values: Json | null
+          p_new_values: Json | null
+          p_metadata: Json | null
+        }
+        Returns: string
+      }
+      can_access_warehouse: {
+        Args: { p_warehouse_id: string }
+        Returns: boolean
+      }
+      is_warehouse_member: {
+        Args: { p_warehouse_id: string }
+        Returns: boolean
+      }
+      can_read_audit_logs: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      get_financial_summary: {
+        Args: {
+          p_office_id: string
+          p_start_date: string
+          p_end_date: string
+        }
+        Returns: {
+          total_revenue: number
+          total_expense: number
+          net_balance: number
+          transaction_count: number
+        }[]
+      }
     }
     Enums: {
       app_role: UserRole
       shipment_status: ShipmentStatus
       package_type: PackageType
       shipping_company: ShippingCompany
+      warehouse_operation_type: WarehouseOperationType
+      office_operation_type: OfficeOperationType
+      issue_kind: IssueKind
+      issue_state: IssueState
+      transfer_state: TransferState
     }
     CompositeTypes: Record<string, never>
   }

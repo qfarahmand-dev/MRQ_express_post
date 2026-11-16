@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { Eye, Search } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Eye, RefreshCw, Search } from 'lucide-react'
 import { PageHeader } from '@/components/common/page-header'
 import { ManagementNotice } from '@/components/management/management-notice'
 import { Button } from '@/components/ui/button'
@@ -15,9 +15,9 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useAuth } from '@/contexts/auth-context'
 import { useLanguage } from '@/contexts/language-context'
-import { AUDIT_ACTIONS, demoAuditLogs, type AuditAction, type AuditLogEntry } from '@/data/demo-audit-logs'
-import { demoOperationOffices } from '@/data/demo-shipment-operations'
+import { auditService, warehouseService } from '@/services/warehouse-service'
 import { formatDateTime, interpolate, formatNumber } from '@/lib/format'
 import { isUserRole, USER_ROLES, type UserRole } from '@/types/user'
 
@@ -26,10 +26,6 @@ type SelectFilter<T extends string> = T | 'all'
 
 const fieldClass = 'h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 const PAGE_SIZE = 8
-
-function isAuditAction(value: string): value is AuditAction {
-  return AUDIT_ACTIONS.some((action) => action === value)
-}
 
 function isDateFilter(value: string): value is DateFilter {
   return value === 'all' || value === 'today' || value === 'week' || value === 'month'
@@ -49,19 +45,85 @@ function isDateWithinFilter(value: string, filter: DateFilter) {
   return date >= start && date <= now
 }
 
+type AuditLogEntry = {
+  id: string
+  userName: string
+  role: string
+  action: string
+  affectedRecord: string
+  officeId: string | null
+  officeName: string | null
+  createdAt: string
+  details: string
+}
+
+type OfficeOption = {
+  id: string
+  name: string
+}
+
+const AUDIT_ACTIONS = [
+  'shipment_status_changed',
+  'shipment_received',
+  'user_created',
+  'user_role_updated',
+  'office_updated',
+  'warehouse_transfer_registered',
+  'issue_reported',
+] as const
+
+function isAuditAction(value: string): value is (typeof AUDIT_ACTIONS)[number] {
+  return AUDIT_ACTIONS.some((action) => action === value)
+}
+
 export function AuditLogsView() {
   const { t, lang } = useLanguage()
   const [query, setQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState<SelectFilter<UserRole>>('all')
-  const [actionFilter, setActionFilter] = useState<SelectFilter<AuditAction>>('all')
+  const [actionFilter, setActionFilter] = useState<SelectFilter<string>>('all')
   const [officeFilter, setOfficeFilter] = useState<string>('all')
   const [dateFilter, setDateFilter] = useState<DateFilter>('all')
   const [page, setPage] = useState(1)
   const [detailsEntry, setDetailsEntry] = useState<AuditLogEntry | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [offices, setOffices] = useState<OfficeOption[]>([])
+  const [logs, setLogs] = useState<AuditLogEntry[]>([])
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true)
+      const [auditResult, officeResult] = await Promise.all([
+        auditService.listAuditLogs(),
+        warehouseService.listWarehouses(),
+      ])
+      setOffices(officeResult.map((o) => ({ id: o.id, name: o.name })))
+
+      const mappedLogs: AuditLogEntry[] = auditResult.map((log) => ({
+        id: log.id,
+        userName: log.actorId,
+        role: 'admin',
+        action: log.action,
+        affectedRecord: log.entityId,
+        officeId: log.officeId,
+        officeName: null,
+        createdAt: log.createdAt,
+        details: log.metadata ? JSON.stringify(log.metadata) : '',
+      }))
+      setLogs(mappedLogs)
+    } catch (err) {
+      console.error('Failed to load audit logs', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const filteredLogs = useMemo(() => {
     const text = query.trim().toLocaleLowerCase()
-    return demoAuditLogs.filter((entry) => {
+    return logs.filter((entry) => {
       if (roleFilter !== 'all' && entry.role !== roleFilter) return false
       if (actionFilter !== 'all' && entry.action !== actionFilter) return false
       if (officeFilter === 'system' && entry.officeId !== null) return false
@@ -70,15 +132,15 @@ export function AuditLogsView() {
       if (!text) return true
       const searchable = [
         entry.userName,
-        t.roles[entry.role],
-        t.auditLog.actions[entry.action],
+        entry.role,
+        entry.action,
         entry.affectedRecord,
-        entry.officeName ?? t.auditLog.systemWide,
-        t.auditLog.details[entry.details],
+        entry.officeName ?? '',
+        entry.details,
       ].join(' ').toLocaleLowerCase()
       return searchable.includes(text)
     })
-  }, [query, roleFilter, actionFilter, officeFilter, dateFilter, t])
+  }, [logs, query, roleFilter, actionFilter, officeFilter, dateFilter])
 
   const totalPages = Math.max(1, Math.ceil(filteredLogs.length / PAGE_SIZE))
   const currentPage = Math.min(page, totalPages)
@@ -89,6 +151,18 @@ export function AuditLogsView() {
 
   function resetPage() {
     setPage(1)
+  }
+
+  if (loading) {
+    return (
+      <>
+        <PageHeader title={t.auditLog.title} description={t.auditLog.description} />
+        <ManagementNotice>{t.auditLog.demoNotice}</ManagementNotice>
+        <div className="flex items-center justify-center py-20">
+          <RefreshCw className="size-8 animate-spin text-muted-foreground" />
+        </div>
+      </>
+    )
   }
 
   return (
@@ -122,7 +196,7 @@ export function AuditLogsView() {
               resetPage()
             }} className={fieldClass}>
               <option value="all">{t.auditLog.allActions}</option>
-              {AUDIT_ACTIONS.map((action) => <option key={action} value={action}>{t.auditLog.actions[action]}</option>)}
+              {AUDIT_ACTIONS.map((action) => <option key={action} value={action}>{action}</option>)}
             </select>
           </label>
           <label>
@@ -130,7 +204,7 @@ export function AuditLogsView() {
             <select aria-label={t.auditLog.filterOffice} value={officeFilter} onChange={(event) => { setOfficeFilter(event.target.value); resetPage() }} className={fieldClass}>
               <option value="all">{t.auditLog.allOffices}</option>
               <option value="system">{t.auditLog.systemWide}</option>
-              {demoOperationOffices.map((office) => <option key={office.id} value={office.id}>{office.name}</option>)}
+              {offices.map((office) => <option key={office.id} value={office.id}>{office.name}</option>)}
             </select>
           </label>
           <label>
@@ -163,8 +237,8 @@ export function AuditLogsView() {
               {pageItems.map((entry) => (
                 <TableRow key={entry.id}>
                   <TableCell className="font-medium">{entry.userName}</TableCell>
-                  <TableCell>{t.roles[entry.role]}</TableCell>
-                  <TableCell>{t.auditLog.actions[entry.action]}</TableCell>
+                  <TableCell>{entry.role}</TableCell>
+                  <TableCell>{entry.action}</TableCell>
                   <TableCell dir="ltr" className="max-w-48 truncate font-mono text-xs">{entry.affectedRecord}</TableCell>
                   <TableCell>{entry.officeName ?? t.auditLog.systemWide}</TableCell>
                   <TableCell className="whitespace-nowrap">{formatDateTime(entry.createdAt, lang)}</TableCell>
@@ -203,12 +277,12 @@ export function AuditLogsView() {
             <dl className="grid gap-3 sm:grid-cols-2">
               {[
                 [t.auditLog.user, detailsEntry.userName],
-                [t.auditLog.role, t.roles[detailsEntry.role]],
-                [t.auditLog.action, t.auditLog.actions[detailsEntry.action]],
+                [t.auditLog.role, detailsEntry.role],
+                [t.auditLog.action, detailsEntry.action],
                 [t.auditLog.affectedRecord, detailsEntry.affectedRecord],
                 [t.auditLog.office, detailsEntry.officeName ?? t.auditLog.systemWide],
                 [t.auditLog.dateTime, formatDateTime(detailsEntry.createdAt, lang)],
-                [t.auditLog.activityDetails, t.auditLog.details[detailsEntry.details]],
+                [t.auditLog.activityDetails, detailsEntry.details],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-lg border p-3">
                   <dt className="text-xs text-muted-foreground">{label}</dt>

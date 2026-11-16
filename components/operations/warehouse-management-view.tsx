@@ -1,7 +1,19 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { ArrowDownToLine, ArrowRightLeft, ArrowUpFromLine, Check, CircleAlert, MapPin, ScanSearch, Search, Warehouse } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import {
+  ArrowDownToLine,
+  ArrowRightLeft,
+  ArrowUpFromLine,
+  Check,
+  CircleAlert,
+  MapPin,
+  RefreshCw,
+  ScanSearch,
+  Search,
+  Warehouse,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { FormField } from '@/components/common/form-field'
 import { PageHeader } from '@/components/common/page-header'
@@ -24,18 +36,17 @@ import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/contexts/auth-context'
 import { useLanguage } from '@/contexts/language-context'
 import {
-  demoOperationOffices,
-  demoOperationalIssues,
-  demoOperationalShipments,
-  demoOperationalTransfers,
-  demoWarehouseActivities,
-  forAssignedOffice,
-  type OperationalIssue,
-  type OperationalShipment,
-  type OperationalTransfer,
-  type ShipmentIssueKind,
-  type WarehouseActivity,
-} from '@/data/demo-shipment-operations'
+  subscribeToShipmentChanges,
+  subscribeToWarehouseOperations,
+  subscribeToTransfers,
+} from '@/lib/realtime'
+import {
+  officeOperationsService,
+  shipmentIssuesService,
+  shipmentOpsService,
+  shipmentTransfersService,
+  warehouseService,
+} from '@/services/warehouse-service'
 import { formatDateTime } from '@/lib/format'
 import { normalizeTrackingNumber } from '@/lib/validation'
 import { SHIPMENT_STATUSES, type ShipmentStatus } from '@/types/shipment'
@@ -46,6 +57,49 @@ type PendingStatusChange = {
   shipmentId: string
   status: ShipmentStatus
   action: 'receive' | 'prepare' | 'dispatch'
+}
+
+type RealShipment = {
+  id: string
+  trackingNumber: string | null
+  officeId: string | null
+  status: string
+  destination: string
+  recipient: string
+  location: string
+  storageLocation: string
+  updatedAt: string
+  notes: string
+}
+
+type RealIssue = {
+  id: string
+  trackingNumber: string
+  officeId: string
+  kind: 'damaged' | 'missing' | 'delay'
+  description: string
+  state: 'open' | 'resolved'
+  createdAt: string
+}
+
+type RealTransfer = {
+  id: string
+  trackingNumber: string
+  officeId: string
+  fromOffice: string
+  toOffice: string
+  state: 'in_transit' | 'received'
+  createdAt: string
+  note: string
+}
+
+type RealActivity = {
+  id: string
+  trackingNumber: string
+  officeId: string
+  activity: string
+  location: string
+  createdAt: string
 }
 
 const fieldClass = 'h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
@@ -76,15 +130,14 @@ export function WarehouseManagementView({ mode }: { mode: WarehouseMode }) {
   const { t, lang } = useLanguage()
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
-  const officeId = user?.officeId ?? (isAdmin ? 'demo-office-kbl' : undefined)
-  const shipmentRows = isAdmin ? demoOperationalShipments : officeId ? forAssignedOffice(demoOperationalShipments, officeId) : []
-  const issueRows = isAdmin ? demoOperationalIssues.filter((issue) => issue.kind !== 'delay') : officeId ? forAssignedOffice(demoOperationalIssues, officeId).filter((issue) => issue.kind !== 'delay') : []
-  const transferRows = isAdmin ? demoOperationalTransfers : officeId ? forAssignedOffice(demoOperationalTransfers, officeId) : []
-  const activityRows = isAdmin ? demoWarehouseActivities : officeId ? forAssignedOffice(demoWarehouseActivities, officeId) : []
-  const [shipments, setShipments] = useState<OperationalShipment[]>(shipmentRows)
-  const [issues, setIssues] = useState<OperationalIssue[]>(issueRows)
-  const [transfers, setTransfers] = useState<OperationalTransfer[]>(transferRows)
-  const [activities, setActivities] = useState<WarehouseActivity[]>(activityRows)
+  const officeId = user?.officeId ?? (isAdmin ? undefined : undefined)
+
+  const [shipments, setShipments] = useState<RealShipment[]>([])
+  const [issues, setIssues] = useState<RealIssue[]>([])
+  const [transfers, setTransfers] = useState<RealTransfer[]>([])
+  const [activities, setActivities] = useState<RealActivity[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<ShipmentStatus | 'all'>('all')
   const [locationDrafts, setLocationDrafts] = useState<Record<string, string>>({})
@@ -92,18 +145,130 @@ export function WarehouseManagementView({ mode }: { mode: WarehouseMode }) {
   const [scanValue, setScanValue] = useState('')
   const [scanQuery, setScanQuery] = useState('')
   const [issueTracking, setIssueTracking] = useState('')
-  const [issueKind, setIssueKind] = useState<ShipmentIssueKind>('damaged')
+  const [issueKind, setIssueKind] = useState<'damaged' | 'missing' | 'delay'>('damaged')
   const [issueDescription, setIssueDescription] = useState('')
   const [transferTracking, setTransferTracking] = useState('')
-  const [transferDestinationType, setTransferDestinationType] = useState<'office' | 'department'>('office')
+  const [transferDestinationType, setTransferDestinationType] = useState<'office'>('office')
   const [transferDestination, setTransferDestination] = useState('')
   const [transferNote, setTransferNote] = useState('')
+
+  const loadData = useCallback(async () => {
+    if (!officeId) {
+      setLoading(false)
+      return
+    }
+    try {
+      setLoading(true)
+      setError(null)
+
+      const [shipmentResult, issueResult, transferResult, activityResult] = await Promise.all([
+        shipmentOpsService.listShipments(officeId),
+        shipmentIssuesService.listIssues(officeId),
+        shipmentTransfersService.listTransfers(officeId),
+        warehouseService.listWarehouseOperations(),
+      ])
+
+      const modeStatus = mode === 'incoming'
+        ? 'registered'
+        : mode === 'outgoing'
+          ? 'in_warehouse'
+          : mode === 'warehouse'
+            ? 'in_warehouse'
+            : undefined
+
+      const filteredShipments = shipmentResult.filter((s) => {
+        if (modeStatus && s.status !== modeStatus) return false
+        if (statusFilter !== 'all' && s.status !== statusFilter) return false
+        return true
+      })
+
+      const shipmentsWithLocation: RealShipment[] = filteredShipments.map((s) => {
+        const activity = activities.find((a) => a.trackingNumber === s.trackingNumber)
+        return {
+          id: s.id,
+          trackingNumber: s.trackingNumber,
+          officeId: s.officeId,
+          status: s.status,
+          destination: s.destinationCountry,
+          recipient: s.receiverName,
+          location: activity?.location || '',
+          storageLocation: '',
+          updatedAt: s.updatedAt,
+          notes: '',
+        }
+      })
+
+      setShipments(shipmentsWithLocation)
+
+      const mappedIssues: RealIssue[] = issueResult.map((i) => ({
+        id: i.id,
+        trackingNumber: i.shipmentId,
+        officeId: i.officeId,
+        kind: i.kind,
+        description: i.description,
+        state: i.state,
+        createdAt: i.createdAt,
+      }))
+      setIssues(mappedIssues)
+
+      const mappedTransfers: RealTransfer[] = transferResult.map((t) => ({
+        id: t.id,
+        trackingNumber: t.shipmentId,
+        officeId: t.officeId,
+        fromOffice: t.sourceOfficeId || '',
+        toOffice: t.destinationOfficeId || '',
+        state: t.state,
+        createdAt: t.createdAt,
+        note: t.note || '',
+      }))
+      setTransfers(mappedTransfers)
+
+      const mappedActivities: RealActivity[] = activityResult.map((a) => ({
+        id: a.id,
+        trackingNumber: a.shipmentId,
+        officeId: a.officeId,
+        activity: a.operationType,
+        location: a.location || '',
+        createdAt: a.createdAt,
+      }))
+      setActivities(mappedActivities)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load data')
+      toast.error(t.common.unexpectedError || 'Failed to load data')
+    } finally {
+      setLoading(false)
+    }
+  }, [officeId, mode, statusFilter, t])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  useEffect(() => {
+    if (!officeId) return
+
+    const unsubscribeShipments = subscribeToShipmentChanges(officeId, () => {
+      loadData()
+    })
+    const unsubscribeOperations = subscribeToWarehouseOperations(undefined, () => {
+      loadData()
+    })
+    const unsubscribeTransfers = subscribeToTransfers(officeId, () => {
+      loadData()
+    })
+
+    return () => {
+      unsubscribeShipments()
+      unsubscribeOperations()
+      unsubscribeTransfers()
+    }
+  }, [officeId, loadData])
 
   const visibleShipments = useMemo(() => {
     const text = query.trim().toLocaleLowerCase()
     return shipments.filter((shipment) => {
-      if (mode === 'incoming' && shipment.flow !== 'incoming') return false
-      if (mode === 'outgoing' && shipment.flow !== 'outgoing') return false
+      if (mode === 'incoming' && shipment.status !== 'registered' && shipment.status !== 'in_transit') return false
+      if (mode === 'outgoing' && shipment.status !== 'in_warehouse') return false
       if (mode === 'warehouse' && shipment.status !== 'in_warehouse') return false
       if (statusFilter !== 'all' && shipment.status !== statusFilter) return false
       if (text && !`${shipment.trackingNumber} ${shipment.destination} ${shipment.recipient} ${shipment.storageLocation}`.toLocaleLowerCase().includes(text)) return false
@@ -112,54 +277,57 @@ export function WarehouseManagementView({ mode }: { mode: WarehouseMode }) {
   }, [shipments, mode, statusFilter, query])
 
   const scannedShipment = scanQuery
-    ? shipments.find((shipment) => normalizeTrackingNumber(shipment.trackingNumber) === scanQuery)
+    ? shipments.find((shipment) => normalizeTrackingNumber(shipment.trackingNumber ?? '') === scanQuery)
     : undefined
 
-  function requestStatusChange(shipment: OperationalShipment, action: PendingStatusChange['action'], status: ShipmentStatus) {
+  function requestStatusChange(shipment: RealShipment, action: PendingStatusChange['action'], status: ShipmentStatus) {
     setPendingStatusChange({ shipmentId: shipment.id, status, action })
   }
 
-  function confirmStatusChange() {
+  async function confirmStatusChange() {
     if (!pendingStatusChange || !officeId) return
     const shipment = shipments.find((entry) => entry.id === pendingStatusChange.shipmentId)
     if (!shipment) return
-    const activityLabel = pendingStatusChange.action === 'receive'
-      ? t.operations.receiveShipment
-      : pendingStatusChange.action === 'prepare'
-        ? t.operations.prepareForDispatch
-        : t.operations.confirmDispatch
-    const location = pendingStatusChange.status === 'in_warehouse' ? shipment.location : t.operations.dispatchBay
 
-    setShipments((current) => current.map((entry) => entry.id === shipment.id
-      ? { ...entry, status: pendingStatusChange.status, location, updatedAt: new Date().toISOString() }
-      : entry))
-    setActivities((current) => [{
-      id: `demo-activity-${crypto.randomUUID()}`,
-      trackingNumber: shipment.trackingNumber,
-      officeId,
-      activity: activityLabel,
-      location,
-      createdAt: new Date().toISOString(),
-    }, ...current])
-    setPendingStatusChange(null)
-    toast.info(t.operations.previewChangeNotice)
+    try {
+      if (pendingStatusChange.action === 'receive') {
+        await warehouseService.receiveShipment(
+          shipment.id,
+          officeId,
+          shipment.location,
+          '',
+        )
+      } else if (pendingStatusChange.action === 'dispatch') {
+        await warehouseService.dispatchShipment(
+          shipment.id,
+          officeId,
+          shipment.location,
+          '',
+        )
+      }
+
+      await loadData()
+      setPendingStatusChange(null)
+      toast.success(t.operations.confirmAction || 'Operation completed')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t.operations.operationFailed || 'Operation failed')
+    }
   }
 
-  function recordStorageLocation(event: React.FormEvent<HTMLFormElement>, shipment: OperationalShipment) {
+  async function recordStorageLocation(event: React.FormEvent<HTMLFormElement>, shipment: RealShipment) {
     event.preventDefault()
     if (!officeId) return
     const location = (locationDrafts[shipment.id] ?? shipment.storageLocation).trim()
     if (!location) return
-    setShipments((current) => current.map((entry) => entry.id === shipment.id ? { ...entry, storageLocation: location } : entry))
-    setActivities((current) => [{
-      id: `demo-activity-${crypto.randomUUID()}`,
-      trackingNumber: shipment.trackingNumber,
-      officeId,
-      activity: t.operations.storageLocationRecorded,
-      location,
-      createdAt: new Date().toISOString(),
-    }, ...current])
-    toast.info(t.operations.previewChangeNotice)
+
+    try {
+      await warehouseService.recordStorageLocation(shipment.id, officeId, location, '')
+      await loadData()
+      setLocationDrafts((current) => ({ ...current, [shipment.id]: '' }))
+      toast.success(t.operations.storageLocationRecorded || 'Location recorded')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to record location')
+    }
   }
 
   function submitScan(event: React.FormEvent<HTMLFormElement>) {
@@ -167,55 +335,70 @@ export function WarehouseManagementView({ mode }: { mode: WarehouseMode }) {
     setScanQuery(normalizeTrackingNumber(scanValue))
   }
 
-  function createIssue(event: React.FormEvent<HTMLFormElement>) {
+  async function createIssue(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!officeId || !issueTracking.trim() || !issueDescription.trim()) return
-    setIssues((current) => [{
-      id: `demo-issue-${crypto.randomUUID()}`,
-      trackingNumber: normalizeTrackingNumber(issueTracking),
-      officeId,
-      kind: issueKind,
-      description: issueDescription.trim(),
-      state: 'open',
-      createdAt: new Date().toISOString(),
-    }, ...current])
-    setIssueTracking('')
-    setIssueDescription('')
-    toast.info(t.operations.previewChangeNotice)
+
+    const shipment = await shipmentOpsService.getShipmentByTrackingNumber(issueTracking)
+    if (!shipment) {
+      toast.error('Shipment not found')
+      return
+    }
+
+    try {
+      await shipmentIssuesService.reportIssue(shipment.id, officeId, issueKind, issueDescription)
+      await loadData()
+      setIssueTracking('')
+      setIssueDescription('')
+      toast.success('Issue reported')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to report issue')
+    }
   }
 
-  function registerTransfer(event: React.FormEvent<HTMLFormElement>) {
+  async function registerTransfer(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!officeId || !transferTracking.trim() || !transferDestination) return
-    const destinationName = transferDestinationType === 'office'
-      ? demoOperationOffices.find((office) => office.id === transferDestination)?.name
-      : transferDestination === 'sorting'
-        ? t.operations.sortingDepartment
-        : transferDestination === 'dispatch'
-          ? t.operations.dispatchDepartment
-          : transferDestination === 'quality'
-            ? t.operations.qualityDepartment
-            : undefined
-    if (!destinationName) return
-    setTransfers((current) => [{
-      id: `demo-transfer-${crypto.randomUUID()}`,
-      trackingNumber: normalizeTrackingNumber(transferTracking),
-      officeId,
-      fromOffice: isAdmin ? t.operations.allOffices : t.operations.assignedOffice,
-      toOffice: destinationName,
-      state: 'in_transit',
-      createdAt: new Date().toISOString(),
-      note: transferNote.trim(),
-    }, ...current])
-    setTransferTracking('')
-    setTransferDestination('')
-    setTransferNote('')
-    toast.info(t.operations.previewChangeNotice)
+
+    const shipment = await shipmentOpsService.getShipmentByTrackingNumber(transferTracking)
+    if (!shipment) {
+      toast.error('Shipment not found')
+      return
+    }
+
+    try {
+      await officeOperationsService.transferShipment(
+        shipment.id,
+        officeId,
+        transferDestination,
+        transferNote,
+      )
+      await loadData()
+      setTransferTracking('')
+      setTransferDestination('')
+      setTransferNote('')
+      toast.success('Transfer registered')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to register transfer')
+    }
   }
 
-  function markTransferReceived(transferId: string) {
-    setTransfers((current) => current.map((transfer) => transfer.id === transferId ? { ...transfer, state: 'received' } : transfer))
-    toast.info(t.operations.previewChangeNotice)
+  async function markTransferReceived(transferId: string) {
+    const transfer = transfers.find((t) => t.id === transferId)
+    if (!transfer) return
+
+    try {
+      await officeOperationsService.recordHandover(
+        transfer.trackingNumber,
+        transfer.fromOffice,
+        transfer.toOffice,
+        '',
+      )
+      await loadData()
+      toast.success('Transfer received')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to receive transfer')
+    }
   }
 
   if (!officeId) {
@@ -223,6 +406,28 @@ export function WarehouseManagementView({ mode }: { mode: WarehouseMode }) {
       <>
         <PageHeader title={t.operations[headingByMode[mode]]} description={t.operations[descriptionByMode[mode]]} />
         <ManagementNotice>{t.operations.officeAssignmentMissing}</ManagementNotice>
+      </>
+    )
+  }
+
+  if (loading) {
+    return (
+      <>
+        <PageHeader title={t.operations[headingByMode[mode]]} description={t.operations[descriptionByMode[mode]]} />
+        <div className="flex items-center justify-center py-20">
+          <RefreshCw className="size-8 animate-spin text-muted-foreground" />
+        </div>
+      </>
+    )
+  }
+
+  if (error) {
+    return (
+      <>
+        <PageHeader title={t.operations[headingByMode[mode]]} description={t.operations[descriptionByMode[mode]]} />
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          {error}
+        </div>
       </>
     )
   }
@@ -264,7 +469,7 @@ export function WarehouseManagementView({ mode }: { mode: WarehouseMode }) {
                     <TableCell dir="ltr" className="font-mono font-medium">{shipment.trackingNumber}</TableCell>
                     <TableCell>{shipment.destination}</TableCell>
                     <TableCell>{shipment.recipient}</TableCell>
-                    <TableCell><StatusBadge status={shipment.status} /></TableCell>
+                    <TableCell><StatusBadge status={shipment.status as ShipmentStatus} /></TableCell>
                     {mode === 'warehouse' && (
                       <TableCell>
                         <form className="flex min-w-56 gap-2" onSubmit={(event) => recordStorageLocation(event, shipment)}>
@@ -348,13 +553,13 @@ export function WarehouseManagementView({ mode }: { mode: WarehouseMode }) {
                       <p dir="ltr" className="font-mono font-semibold text-foreground">{scannedShipment.trackingNumber}</p>
                       <p className="truncate text-sm text-muted-foreground">{scannedShipment.destination} · {scannedShipment.recipient}</p>
                     </div>
-                    <StatusBadge status={scannedShipment.status} />
+                    <StatusBadge status={scannedShipment.status as ShipmentStatus} />
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {scannedShipment.flow === 'incoming' && scannedShipment.status !== 'in_warehouse' && (
+                    {scannedShipment.status !== 'in_warehouse' && (
                       <Button onClick={() => requestStatusChange(scannedShipment, 'receive', 'in_warehouse')}><ArrowDownToLine aria-hidden="true" />{t.operations.confirmArrival}</Button>
                     )}
-                    {scannedShipment.flow === 'outgoing' && scannedShipment.status === 'in_warehouse' && (
+                    {scannedShipment.status === 'in_warehouse' && (
                       <Button onClick={() => requestStatusChange(scannedShipment, 'dispatch', 'dispatched')}><ArrowUpFromLine aria-hidden="true" />{t.operations.confirmDispatch}</Button>
                     )}
                   </div>
@@ -381,10 +586,11 @@ export function WarehouseManagementView({ mode }: { mode: WarehouseMode }) {
                 </FormField>
                 <FormField id="warehouse-issue-type" label={t.operations.issueType} required>
                   <select id="warehouse-issue-type" value={issueKind} onChange={(event) => {
-                    if (event.target.value === 'damaged' || event.target.value === 'missing') setIssueKind(event.target.value)
+                    if (event.target.value === 'damaged' || event.target.value === 'missing' || event.target.value === 'delay') setIssueKind(event.target.value)
                   }} className={fieldClass}>
                     <option value="damaged">{t.operations.damaged}</option>
                     <option value="missing">{t.operations.missing}</option>
+                    <option value="delay">{t.operations.delay}</option>
                   </select>
                 </FormField>
                 <FormField id="warehouse-issue-description" label={t.operations.description} required className="md:col-span-2">
@@ -412,7 +618,7 @@ export function WarehouseManagementView({ mode }: { mode: WarehouseMode }) {
                   {issues.map((issue) => (
                     <TableRow key={issue.id}>
                       <TableCell dir="ltr" className="font-mono font-medium">{issue.trackingNumber}</TableCell>
-                      <TableCell>{issue.kind === 'damaged' ? t.operations.damaged : t.operations.missing}</TableCell>
+                      <TableCell>{issue.kind === 'damaged' ? t.operations.damaged : issue.kind === 'missing' ? t.operations.missing : t.operations.delay}</TableCell>
                       <TableCell className="max-w-80 whitespace-normal">{issue.description}</TableCell>
                       <TableCell>{issue.state === 'open' ? t.operations.open : t.operations.resolved}</TableCell>
                       <TableCell>{formatDateTime(issue.createdAt, lang)}</TableCell>
@@ -438,34 +644,9 @@ export function WarehouseManagementView({ mode }: { mode: WarehouseMode }) {
                 <FormField id="transfer-tracking" label={t.operations.trackingNumber} required>
                   <Input id="transfer-tracking" dir="ltr" value={transferTracking} onChange={(event) => setTransferTracking(event.target.value)} required />
                 </FormField>
-                <FormField id="transfer-destination-type" label={t.operations.destinationType} required>
-                  <select
-                    id="transfer-destination-type"
-                    value={transferDestinationType}
-                    onChange={(event) => {
-                      if (event.target.value === 'office' || event.target.value === 'department') {
-                        setTransferDestinationType(event.target.value)
-                        setTransferDestination('')
-                      }
-                    }}
-                    className={fieldClass}
-                  >
-                    <option value="office">{t.operations.office}</option>
-                    <option value="department">{t.operations.department}</option>
-                  </select>
-                </FormField>
-                <FormField id="transfer-destination" label={transferDestinationType === 'office' ? t.operations.destinationOffice : t.operations.department} required>
+                <FormField id="transfer-destination" label={t.operations.destinationOffice} required>
                   <select id="transfer-destination" value={transferDestination} onChange={(event) => setTransferDestination(event.target.value)} className={fieldClass} required>
-                    <option value="">{transferDestinationType === 'office' ? t.operations.selectDestination : t.operations.selectDepartment}</option>
-                    {transferDestinationType === 'office'
-                      ? demoOperationOffices.filter((office) => isAdmin || office.id !== officeId).map((office) => <option key={office.id} value={office.id}>{office.name}</option>)
-                      : (
-                        <>
-                          <option value="sorting">{t.operations.sortingDepartment}</option>
-                          <option value="dispatch">{t.operations.dispatchDepartment}</option>
-                          <option value="quality">{t.operations.qualityDepartment}</option>
-                        </>
-                      )}
+                    <option value="">{t.operations.selectDestination}</option>
                   </select>
                 </FormField>
                 <FormField id="transfer-note" label={t.operations.notes} className="md:col-span-2">
