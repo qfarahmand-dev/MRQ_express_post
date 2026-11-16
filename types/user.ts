@@ -18,6 +18,7 @@ export type AppUser = UserAssignment & {
   email: string
   avatarUrl?: string
   createdAt: string
+  mustChangePassword: boolean
 }
 
 export interface ProfileUpdateInput {

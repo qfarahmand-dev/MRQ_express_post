@@ -9,6 +9,7 @@ export const mockUsers: AppUser[] = [
     officeId: null,
     accountStatus: 'active',
     createdAt: '2025-03-12T09:00:00.000Z',
+    mustChangePassword: false,
   },
   {
     id: 'usr_admin_02',
@@ -18,6 +19,7 @@ export const mockUsers: AppUser[] = [
     officeId: null,
     accountStatus: 'active',
     createdAt: '2025-09-04T09:00:00.000Z',
+    mustChangePassword: false,
   },
 ]
 

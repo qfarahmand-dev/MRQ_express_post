@@ -146,6 +146,13 @@ export async function POST(request: Request) {
 
   const accountStatus = body.accountStatus
 
+  const initialPassword = typeof body.initialPassword === 'string'
+    ? body.initialPassword
+    : ''
+  const confirmPassword = typeof body.confirmPassword === 'string'
+    ? body.confirmPassword
+    : ''
+
   if (
     !fullName ||
     !isValidEmail(email) ||
@@ -157,9 +164,17 @@ export async function POST(request: Request) {
 
   if (accountStatus !== 'active') {
     return Response.json(
-      { error: 'new_users_must_be_invited_active' },
+      { error: 'new_users_must_be_active' },
       { status: 400 }
     )
+  }
+
+  if (initialPassword.length < 6) {
+    return Response.json({ error: 'password_short' }, { status: 400 })
+  }
+
+  if (initialPassword !== confirmPassword) {
+    return Response.json({ error: 'password_mismatch' }, { status: 400 })
   }
 
   const officeId = actor.role === 'office_manager'
@@ -168,7 +183,7 @@ export async function POST(request: Request) {
 
   if (actor.role === 'office_manager' && role !== 'storekeeper') {
     return Response.json(
-      { error: 'office_managers_can_only_invite_storekeepers' },
+      { error: 'office_managers_can_only_create_storekeepers' },
       { status: 403 }
     )
   }
@@ -199,125 +214,50 @@ export async function POST(request: Request) {
     }
   }
 
-  // Use the canonical production URL for invitation redirects.
-  // Never derive the invitation URL from request.url because
-  // Vercel preview deployments have different hostnames.
-  const appUrl = process.env.APP_URL
-
-  if (!appUrl) {
-    console.error('Invitation failed: APP_URL is not configured.')
-
-    return Response.json(
-      { error: 'app_url_not_configured' },
-      { status: 500 }
-    )
+  // Check for duplicate email
+  const { data: existingUsers } = await adminClient.auth.admin.listUsers()
+  if (existingUsers?.users?.some((u) => u.email?.toLowerCase() === email)) {
+    return Response.json({ error: 'email_already_exists' }, { status: 409 })
   }
 
-  let redirectUrl: URL
-
-  try {
-    const parsedAppUrl = new URL(appUrl)
-
-    if (
-      parsedAppUrl.protocol !== 'https:' &&
-      process.env.NODE_ENV === 'production'
-    ) {
-      return Response.json(
-        { error: 'invalid_app_url_configuration' },
-        { status: 500 }
-      )
-    }
-
-    redirectUrl = new URL('/auth/callback', parsedAppUrl.origin)
-    redirectUrl.searchParams.set('next', '/invite/complete')
-  } catch {
-    return Response.json(
-      { error: 'invalid_app_url_configuration' },
-      { status: 500 }
-    )
-  }
-
-  // Create the invitation record in the database.
-  const { error: inviteInsertError } = await adminClient
-    .from('user_invites')
-    .insert({
-      email,
+  // Create the user directly in Supabase Auth with the initial password.
+  // The database trigger creates the profile with must_change_password = true.
+  const { data: authUser, error: authError } = await adminClient.auth.admin.createUser({
+    email,
+    password: initialPassword,
+    user_metadata: {
       full_name: fullName,
       role,
-      office_id: officeId,
-      invited_by: actor.id,
-    })
+      office_id: officeId ?? null,
+    },
+    email_confirm: true,
+  })
 
-  if (inviteInsertError) {
-    if (inviteInsertError.code !== '23505') {
-      return Response.json(
-        {
-          error: managementDatabaseError(
-            inviteInsertError,
-            'invite_record_failed'
-          ),
-        },
-        { status: 500 }
-      )
-    }
+  if (authError || !authUser?.user) {
+    console.error('User creation failed:', {
+      message: authError?.message,
+      status: authError?.status,
+      code: authError?.code,
+    })
 
     return Response.json(
-      { error: 'email_already_invited' },
-      { status: 409 }
-    )
-  }
-
-  // Send the Supabase authentication invitation.
-  const { data: invitation, error: authInviteError } =
-    await adminClient.auth.admin.inviteUserByEmail(email, {
-      data: {
-        full_name: fullName,
-      },
-      redirectTo: redirectUrl.toString(),
-    })
-
-  if (authInviteError || !invitation?.user) {
-    // Log the actual Supabase error on the server.
-    console.error('Supabase invitation failed:', {
-      message: authInviteError?.message,
-      status: authInviteError?.status,
-      code: authInviteError?.code,
-    })
-
-    // Remove the pending invitation record if email invitation fails.
-    const { error: cleanupError } = await adminClient
-      .from('user_invites')
-      .delete()
-      .eq('email', email)
-      .is('accepted_at', null)
-
-    if (cleanupError) {
-      console.error('Invitation cleanup failed:', cleanupError.message)
-
-      return Response.json(
-        { error: 'invite_failed_cleanup_failed' },
-        { status: 500 }
-      )
-    }
-
-    return Response.json(
-      { error: 'auth_invite_failed' },
+      { error: 'user_creation_failed' },
       { status: 400 }
     )
   }
 
-  // Fetch the profile created by the database trigger.
+  // Fetch the profile created by the database trigger
   const { data: profile, error: profileError } = await adminClient
     .from('profiles')
-    .select('id, full_name, role, office_id, account_status, created_at')
-    .eq('id', invitation.user.id)
+    .select('id, full_name, role, office_id, account_status, must_change_password, created_at')
+    .eq('id', authUser.user.id)
     .single()
 
   if (profileError) {
-    console.error('Invited profile lookup failed:', profileError.message)
+    console.error('Profile lookup failed:', profileError.message)
 
     return Response.json(
-      { error: 'invited_profile_not_created' },
+      { error: 'profile_not_created' },
       { status: 500 }
     )
   }
@@ -327,12 +267,12 @@ export async function POST(request: Request) {
       user: {
         id: profile.id,
         fullName: profile.full_name,
-        email: invitation.user.email ?? email,
+        email: authUser.user.email ?? email,
         role: profile.role,
         officeId: profile.office_id,
         accountStatus: profile.account_status,
         createdAt: profile.created_at,
-        lastLoginAt: invitation.user.last_sign_in_at ?? null,
+        mustChangePassword: profile.must_change_password,
       },
     },
     { status: 201 }

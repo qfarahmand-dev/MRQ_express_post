@@ -84,7 +84,7 @@ export const authService = {
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('id, full_name, role, office_id, account_status, created_at')
+      .select('id, full_name, role, office_id, account_status, must_change_password, created_at')
       .eq('id', authData.user.id)
       .single()
 
@@ -103,6 +103,7 @@ export const authService = {
         officeId: null,
         accountStatus: profile.account_status,
         createdAt: profile.created_at,
+        mustChangePassword: profile.must_change_password,
       }
     }
     if (!profile.office_id) throw new Error('An office assignment is required')
@@ -121,6 +122,7 @@ export const authService = {
       officeId: profile.office_id,
       accountStatus: profile.account_status,
       createdAt: profile.created_at,
+      mustChangePassword: profile.must_change_password,
     }
   },
 
@@ -164,6 +166,23 @@ export const authService = {
       }
       return { ok: false, error: 'request_failed' }
     }
+    return { ok: true }
+  },
+
+  async clearMustChangePassword(): Promise<{ ok: boolean; error?: string }> {
+    const supabase = getSupabaseClient()
+    if (!supabase) return { ok: false, error: 'not_configured' }
+
+    const { data: authData, error: authError } = await supabase.auth.getUser()
+    if (authError) return { ok: false, error: 'request_failed' }
+    if (!authData.user) return { ok: false, error: 'not_authenticated' }
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ must_change_password: false })
+      .eq('id', authData.user.id)
+
+    if (error) return { ok: false, error: 'request_failed' }
     return { ok: true }
   },
 }

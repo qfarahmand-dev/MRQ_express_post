@@ -27,7 +27,10 @@ import { managementErrorMessage } from '@/lib/management-error-message'
 import { isValidEmail } from '@/lib/validation'
 import { isUserRole, USER_ROLES, type AccountStatus } from '@/types/user'
 
-type UserDraft = Pick<ManagedUser, 'fullName' | 'email' | 'role' | 'officeId' | 'accountStatus'>
+type UserDraft = Pick<ManagedUser, 'fullName' | 'email' | 'role' | 'officeId' | 'accountStatus'> & {
+  initialPassword: string
+  confirmPassword: string
+}
 type UserDialogState = { mode: 'create' } | { mode: 'edit' | 'details'; user: ManagedUser }
 type FilterValue = 'all' | string
 
@@ -64,8 +67,12 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
     role: officeEmployeesOnly ? 'storekeeper' : 'office_manager',
     officeId: officeEmployeesOnly ? currentUser?.officeId ?? null : null,
     accountStatus: 'active',
+    initialPassword: '',
+    confirmPassword: '',
   })
   const [formError, setFormError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const isManager = officeEmployeesOnly
 
@@ -118,7 +125,11 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
       role: isManager ? 'storekeeper' : 'office_manager',
       officeId: isManager ? currentUser?.officeId ?? null : null,
       accountStatus: 'active',
+      initialPassword: '',
+      confirmPassword: '',
     })
+    setShowPassword(false)
+    setShowConfirmPassword(false)
     setFormError('')
     setDialog({ mode: 'create' })
   }
@@ -130,6 +141,8 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
       role: entry.role,
       officeId: isManager ? currentUser?.officeId ?? null : entry.officeId,
       accountStatus: entry.accountStatus,
+      initialPassword: '',
+      confirmPassword: '',
     })
     setFormError('')
     setDialog({ mode: 'edit', user: entry })
@@ -155,6 +168,18 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
       return
     }
 
+    // Password validation for create mode
+    if (dialog?.mode === 'create') {
+      if (!draft.initialPassword || draft.initialPassword.length < 6) {
+        setFormError(t.login.errors.passwordShort)
+        return
+      }
+      if (draft.initialPassword !== draft.confirmPassword) {
+        setFormError(t.profile.passwordMismatch)
+        return
+      }
+    }
+
     const body = isManager
       ? {
           id: dialog?.mode === 'edit' ? dialog.user.id : undefined,
@@ -168,6 +193,10 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
           role: draft.role,
           officeId: draft.role === 'admin' ? null : officeId,
           accountStatus: draft.accountStatus,
+          ...(dialog?.mode === 'create' ? {
+            initialPassword: draft.initialPassword,
+            confirmPassword: draft.confirmPassword,
+          } : {}),
         }
     setIsSaving(true)
     try {
@@ -184,7 +213,9 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
         setUsers((current) => [result.user, ...current])
       }
       setDialog(null)
-      toast.success(dialog?.mode === 'create' ? t.management.inviteSent : t.management.userSaved)
+      setShowPassword(false)
+      setShowConfirmPassword(false)
+      toast.success(dialog?.mode === 'create' ? t.management.userCreated : t.management.userSaved)
     } catch (error) {
       setFormError(managementErrorMessage(error instanceof Error ? error.message : null, t.management.errors))
     } finally {
@@ -422,6 +453,50 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
                   <option value="inactive">{t.management.inactive}</option>
                 </select>
               </FormField>
+              {dialog?.mode === 'create' && (
+                <div className="md:col-span-2">
+                  <FormField id="managed-user-initial-password" label={t.management.initialPassword} required>
+                    <Input
+                      id="managed-user-initial-password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={draft.initialPassword}
+                      onChange={(event) => setDraft({ ...draft, initialPassword: event.target.value })}
+                      autoComplete="new-password"
+                      minLength={6}
+                      className="h-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? t.common.hidePassword : t.common.showPassword}
+                    >
+                      {showPassword ? <Eye className="size-4" /> : <Eye className="size-4" style={{ opacity: 0.5 }} />}
+                    </Button>
+                  </FormField>
+                  <FormField id="managed-user-confirm-password" label={t.management.confirmPassword} required>
+                    <Input
+                      id="managed-user-confirm-password"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      value={draft.confirmPassword}
+                      onChange={(event) => setDraft({ ...draft, confirmPassword: event.target.value })}
+                      autoComplete="new-password"
+                      minLength={6}
+                      className="h-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      aria-label={showConfirmPassword ? t.common.hidePassword : t.common.showPassword}
+                    >
+                      {showConfirmPassword ? <Eye className="size-4" /> : <Eye className="size-4" style={{ opacity: 0.5 }} />}
+                    </Button>
+                  </FormField>
+                </div>
+              )}
             </div>
             {formError && <p role="alert" className="text-sm text-destructive">{formError}</p>}
             <DialogFooter>

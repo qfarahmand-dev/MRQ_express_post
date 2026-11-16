@@ -19,6 +19,7 @@ export interface Database {
           role: UserRole
           office_id: string | null
           account_status: AccountStatus
+          must_change_password: boolean
           created_at: string
         }
         Insert: {
@@ -27,6 +28,7 @@ export interface Database {
           role?: UserRole
           office_id?: string | null
           account_status?: AccountStatus
+          must_change_password?: boolean
           created_at?: string
         }
         Update: {
@@ -35,6 +37,7 @@ export interface Database {
           role?: UserRole
           office_id?: string | null
           account_status?: AccountStatus
+          must_change_password?: boolean
           created_at?: string
         }
         Relationships: [

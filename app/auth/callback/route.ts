@@ -10,14 +10,14 @@ function redirectWithoutCaching(request: NextRequest, path: string) {
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get('code')
   if (!code) {
-    return redirectWithoutCaching(request, '/invite/complete?error=invalid_link')
+    return redirectWithoutCaching(request, '/login?error=invalid_link')
   }
 
   const supabase = await createServerSupabaseClient()
   const { error } = await supabase.auth.exchangeCodeForSession(code)
   if (error) {
-    return redirectWithoutCaching(request, '/invite/complete?error=invalid_link')
+    return redirectWithoutCaching(request, '/login?error=invalid_link')
   }
 
-  return redirectWithoutCaching(request, '/invite/complete')
+  return redirectWithoutCaching(request, '/dashboard')
 }
