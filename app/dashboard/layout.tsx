@@ -28,7 +28,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .select('role, office_id, account_status')
     .eq('id', authData.user.id)
     .maybeSingle()
-  if (error) throw error
+  if (error) redirect('/login')
   if (
     !profile
     || !isUserRole(profile.role)
@@ -42,7 +42,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       .select('status')
       .eq('id', profile.office_id)
       .maybeSingle()
-    if (officeError) throw officeError
+    if (officeError) redirect('/login')
     if (office?.status !== 'active') redirect('/login')
   }
 

@@ -19,6 +19,22 @@ function isAccountStatus(value: unknown): value is AccountStatus {
   return value === 'active' || value === 'inactive'
 }
 
+function validateOrigin(request: Request): Response | null {
+  const origin = request.headers.get('origin')
+  if (!origin) return null
+  const host = request.headers.get('host')
+  if (!host) return null
+  try {
+    const originHost = new URL(origin).host
+    if (originHost !== host) {
+      return Response.json({ error: 'invalid_origin' }, { status: 403 })
+    }
+  } catch {
+    return Response.json({ error: 'invalid_origin' }, { status: 403 })
+  }
+  return null
+}
+
 function readOfficeDraft(body: Record<string, unknown>): OfficeDraft | null {
   if (
     typeof body.name !== 'string'
@@ -109,6 +125,9 @@ export async function POST(request: Request) {
     return Response.json({ error: 'forbidden' }, { status: 403 })
   }
 
+  const originError = validateOrigin(request)
+  if (originError) return originError
+
   let body: unknown
   try {
     body = await request.json()
@@ -150,6 +169,9 @@ export async function PATCH(request: Request) {
   if (result.context.actor.role !== 'admin') {
     return Response.json({ error: 'forbidden' }, { status: 403 })
   }
+
+  const originError = validateOrigin(request)
+  if (originError) return originError
 
   let body: unknown
   try {

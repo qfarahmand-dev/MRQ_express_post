@@ -23,6 +23,22 @@ function isUserRole(value: unknown): value is UserRole {
   return typeof value === 'string' && USER_ROLES.some((role) => role === value)
 }
 
+function validateOrigin(request: Request): Response | null {
+  const origin = request.headers.get('origin')
+  if (!origin) return null
+  const host = request.headers.get('host')
+  if (!host) return null
+  try {
+    const originHost = new URL(origin).host
+    if (originHost !== host) {
+      return Response.json({ error: 'invalid_origin' }, { status: 403 })
+    }
+  } catch {
+    return Response.json({ error: 'invalid_origin' }, { status: 403 })
+  }
+  return null
+}
+
 export async function GET() {
   const result = await getManagementContext()
   if ('response' in result) return result.response
@@ -79,6 +95,9 @@ export async function POST(request: Request) {
   if (actor.role !== 'admin' && actor.role !== 'office_manager') {
     return Response.json({ error: 'forbidden' }, { status: 403 })
   }
+
+  const originError = validateOrigin(request)
+  if (originError) return originError
 
   let body: unknown
   try {
@@ -184,6 +203,9 @@ export async function PATCH(request: Request) {
   if (actor.role !== 'admin' && actor.role !== 'office_manager') {
     return Response.json({ error: 'forbidden' }, { status: 403 })
   }
+
+  const originError = validateOrigin(request)
+  if (originError) return originError
 
   let body: unknown
   try {

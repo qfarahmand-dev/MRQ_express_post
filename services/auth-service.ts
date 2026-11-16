@@ -157,19 +157,13 @@ export const authService = {
     if (authError) return { ok: false, error: 'request_failed' }
     if (!authData.user?.email) return { ok: false, error: 'not_authenticated' }
 
-    const { error: verificationError } = await supabase.auth.signInWithPassword({
-      email: authData.user.email,
-      password: currentPassword,
-    })
-    if (verificationError) {
-      return {
-        ok: false,
-        error: verificationError.status === 400 ? 'invalid_current_password' : 'request_failed',
-      }
-    }
-
     const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
-    if (updateError) return { ok: false, error: 'request_failed' }
+    if (updateError) {
+      if (updateError.message && /invalid/i.test(updateError.message)) {
+        return { ok: false, error: 'invalid_current_password' }
+      }
+      return { ok: false, error: 'request_failed' }
+    }
     return { ok: true }
   },
 }
