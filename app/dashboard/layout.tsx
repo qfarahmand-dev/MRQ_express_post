@@ -35,7 +35,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
     || profile.account_status !== 'active'
     || (profile.role !== 'admin' && !profile.office_id)
   ) redirect('/login')
-  if (profile.must_change_password) redirect('/dashboard/profile/change-password')
   if (profile.role !== 'admin') {
     if (!profile.office_id) redirect('/login')
     const { data: office, error: officeError } = await supabase

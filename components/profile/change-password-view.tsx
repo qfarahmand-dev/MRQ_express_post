@@ -27,7 +27,6 @@ export function ChangePasswordView() {
   const [errors, setErrors] = useState<PasswordErrors>({})
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
-  const [isFirstLogin, setIsFirstLogin] = useState(true)
 
   function reset() {
     setCurrentPassword('')
@@ -52,15 +51,8 @@ export function ChangePasswordView() {
     try {
       const result = await authService.updatePassword(currentPassword, newPassword)
       if (result.ok) {
-        const clearResult = await authService.clearMustChangePassword()
-        if (clearResult.ok) {
-          toast.success(t.profile.passwordChanged)
-          setIsFirstLogin(false)
-          router.replace('/dashboard')
-          router.refresh()
-          return
-        }
-        setFormError(t.profile.passwordUpdateFailed)
+        toast.success(t.profile.passwordChanged)
+        router.replace('/dashboard')
         return
       }
 
@@ -80,9 +72,7 @@ export function ChangePasswordView() {
     <main className="flex min-h-dvh flex-col bg-muted/30">
       <PageHeader
         title={t.profile.changePassword}
-        description={isFirstLogin
-          ? t.profile.changePasswordFirstLogin
-          : t.profile.changePasswordDescription}
+        description={t.profile.changePasswordDescription}
       />
       <div className="flex flex-1 items-center justify-center px-4 py-10">
         <Card className="w-full max-w-md">
