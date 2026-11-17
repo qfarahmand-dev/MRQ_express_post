@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Eye, Pencil, Plus, Search, UserRound, UserRoundCheck, UserRoundX } from 'lucide-react'
+import { Eye, Pencil, Plus, Search, Trash2, UserRound, UserRoundCheck, UserRoundX } from 'lucide-react'
 import { toast } from 'sonner'
 import { FormField } from '@/components/common/form-field'
 import { PageHeader } from '@/components/common/page-header'
@@ -25,7 +25,7 @@ import type { ManagedOffice, ManagedUser } from '@/data/demo-management-data'
 import { formatDate, initials } from '@/lib/format'
 import { managementErrorMessage } from '@/lib/management-error-message'
 import { isValidEmail } from '@/lib/validation'
-import { isUserRole, USER_ROLES, type AccountStatus } from '@/types/user'
+import { isUserRole, USER_ROLES, type AccountStatus, type AppUser, canDeleteUser } from '@/types/user'
 
 type UserDraft = Pick<ManagedUser, 'fullName' | 'email' | 'role' | 'officeId' | 'accountStatus'> & {
   initialPassword: string
@@ -61,6 +61,7 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
   const [statusFilter, setStatusFilter] = useState<FilterValue>('all')
   const [dialog, setDialog] = useState<UserDialogState | null>(null)
   const [deactivatingUser, setDeactivatingUser] = useState<ManagedUser | null>(null)
+  const [deletingUser, setDeletingUser] = useState<ManagedUser | null>(null)
   const [draft, setDraft] = useState<UserDraft>({
     fullName: '',
     email: '',
@@ -255,6 +256,27 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
     }
   }
 
+  async function handleDeleteUser() {
+    if (!deletingUser) return
+    setIsSaving(true)
+    try {
+      const response = await fetch('/api/management/users', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: deletingUser.id }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(typeof result.error === 'string' ? result.error : 'request_failed')
+      setUsers((current) => current.filter((entry) => entry.id !== deletingUser.id))
+      setDeletingUser(null)
+      toast.success(t.management.userDeleted)
+    } catch (error) {
+      setFormError(managementErrorMessage(error instanceof Error ? error.message : null, t.management.errors))
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const officeName = (officeId: string | null) => (
     officeId ? offices.find((office) => office.id === officeId)?.name ?? officeId : t.management.noOffice
   )
@@ -381,6 +403,16 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
                           >
                             {entry.accountStatus === 'active' ? <UserRoundX aria-hidden="true" /> : <UserRoundCheck aria-hidden="true" />}
                           </Button>
+                          {canDeleteUser(currentUser, entry) && (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={`${t.management.deleteUser}: ${entry.fullName}`}
+                              onClick={() => setDeletingUser(entry)}
+                            >
+                              <Trash2 aria-hidden="true" />
+                            </Button>
+                          )}
                         </>
                       )}
                     </div>
@@ -545,6 +577,23 @@ export function UserManagementView({ officeEmployeesOnly = false }: { officeEmpl
               <Button variant="outline" onClick={() => setDeactivatingUser(null)}>{t.common.cancel}</Button>
               <Button disabled={isSaving} variant={deactivatingUser.accountStatus === 'active' ? 'destructive' : 'default'} onClick={toggleStatus}>
                 {deactivatingUser.accountStatus === 'active' ? t.management.deactivate : t.management.activate}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
+
+      <Dialog open={Boolean(deletingUser)} onOpenChange={(open) => !open && setDeletingUser(null)}>
+        {deletingUser && (
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{t.management.deleteUser}</DialogTitle>
+              <DialogDescription>{t.management.confirmDeleteUser.replace('{name}', deletingUser.fullName)}</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeletingUser(null)}>{t.common.cancel}</Button>
+              <Button disabled={isSaving} variant="destructive" onClick={handleDeleteUser}>
+                {t.management.deleteUser}
               </Button>
             </DialogFooter>
           </DialogContent>

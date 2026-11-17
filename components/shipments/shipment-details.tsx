@@ -18,6 +18,7 @@ import { formatDate, formatDateTime, formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { shipmentService } from '@/services/shipment-service'
 import type { PartyInfo } from '@/types/shipment'
+import { canDeleteShipment, type AppUser } from '@/types/user'
 
 function PartyCard({ icon: Icon, title, party }: { icon: LucideIcon; title: string; party: PartyInfo }) {
   return (
@@ -72,7 +73,7 @@ function PrivatePhotoLink({ path }: { path: string | null }) {
 
 export function ShipmentDetails({ id }: { id: string }) {
   const { t, lang } = useLanguage()
-  const { can } = useAuth()
+  const { can, user } = useAuth()
   const router = useRouter()
   const { data: shipment, error, isLoading } = useShipment(id)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -121,7 +122,7 @@ export function ShipmentDetails({ id }: { id: string }) {
               <Pencil aria-hidden="true" />
               {t.common.edit}
             </Link>
-            {can('delete') ? (
+            {canDeleteShipment(user, shipment.officeId) ? (
               <Button variant="destructive" size="lg" className="px-4" onClick={() => setConfirmDelete(true)}>
                 <Trash2 aria-hidden="true" />
                 {t.common.delete}

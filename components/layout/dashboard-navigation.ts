@@ -51,7 +51,6 @@ export const ROLE_NAVIGATION: Record<UserRole, DashboardNavItem[]> = {
   ],
   office_manager: [
     { href: '/dashboard', label: 'dashboard', icon: LayoutDashboard, exact: true },
-    { href: '/dashboard/search', label: 'advancedSearch', icon: Search, capability: 'shipments.view', officeScoped: true, exact: true },
     { href: '/dashboard/operations/shipments', label: 'shipments', icon: Package, capability: 'shipments.view', officeScoped: true, exact: true },
     { href: '/dashboard/employees', label: 'officeEmployees', icon: Users, capability: 'employees.manage', officeScoped: true, exact: true },
     { href: '/dashboard/operations/incoming', label: 'incomingShipments', icon: ArrowDownToLine, capability: 'shipmentFlows.monitor', officeScoped: true, exact: true },
@@ -63,7 +62,6 @@ export const ROLE_NAVIGATION: Record<UserRole, DashboardNavItem[]> = {
   ],
   storekeeper: [
     { href: '/dashboard', label: 'dashboard', icon: LayoutDashboard, exact: true },
-    { href: '/dashboard/search', label: 'advancedSearch', icon: Search, capability: 'warehouse.incoming.view', officeScoped: true, exact: true },
     { href: '/dashboard/warehouse/incoming', label: 'incomingShipments', icon: ArrowDownToLine, capability: 'warehouse.incoming.view', officeScoped: true, exact: true },
     { href: '/dashboard/warehouse/outgoing', label: 'outgoingShipments', icon: ArrowUpFromLine, capability: 'warehouse.outgoing.register', officeScoped: true, exact: true },
     { href: '/dashboard/warehouse', label: 'warehouse', icon: PackageOpen, capability: 'warehouse.incoming.view', officeScoped: true, exact: true },

@@ -503,3 +503,91 @@ export async function PATCH(request: Request) {
     },
   })
 }
+
+export async function DELETE(request: Request) {
+  const result = await getManagementContext()
+  if ('response' in result) return result.response
+
+  const { actor, adminClient } = result.context
+
+  if (actor.role !== 'admin' && actor.role !== 'office_manager') {
+    return Response.json({ error: 'forbidden' }, { status: 403 })
+  }
+
+  const originError = validateOrigin(request)
+  if (originError) return originError
+
+  let body: unknown
+
+  try {
+    body = await request.json()
+  } catch {
+    return Response.json({ error: 'invalid_request' }, { status: 400 })
+  }
+
+  if (!isRecord(body) || typeof body.id !== 'string') {
+    return Response.json({ error: 'invalid_request' }, { status: 400 })
+  }
+
+  // Prevent self-deletion
+  if (body.id === actor.id) {
+    return Response.json({ error: 'cannot_delete_self' }, { status: 403 })
+  }
+
+  // Look up the target user profile
+  const { data: target, error: targetError } = await adminClient
+    .from('profiles')
+    .select('id, full_name, role, office_id, account_status')
+    .eq('id', body.id)
+    .maybeSingle()
+
+  if (targetError) {
+    return Response.json(
+      { error: managementDatabaseError(targetError, 'user_lookup_failed') },
+      { status: 500 }
+    )
+  }
+
+  if (!target) {
+    return Response.json({ error: 'user_not_found' }, { status: 404 })
+  }
+
+  // Office managers can only delete storekeepers from their own office
+  if (actor.role === 'office_manager') {
+    if (target.role !== 'storekeeper') {
+      return Response.json({ error: 'forbidden' }, { status: 403 })
+    }
+    if (target.office_id !== actor.officeId) {
+      return Response.json({ error: 'forbidden' }, { status: 403 })
+    }
+  }
+
+  // Admin cannot delete the last active admin
+  if (actor.role === 'admin' && target.role === 'admin' && target.account_status === 'active') {
+    const { count, error: adminCountError } = await adminClient
+      .from('profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('role', 'admin')
+      .eq('account_status', 'active')
+
+    if (adminCountError) {
+      return Response.json(
+        { error: managementDatabaseError(adminCountError, 'admin_count_failed') },
+        { status: 500 }
+      )
+    }
+
+    if ((count ?? 0) <= 1) {
+      return Response.json({ error: 'cannot_delete_last_admin' }, { status: 409 })
+    }
+  }
+
+  // Delete from Supabase Auth using server-side service role key
+  const { error: deleteError } = await adminClient.auth.admin.deleteUser(body.id)
+
+  if (deleteError) {
+    return Response.json({ error: 'user_deletion_failed' }, { status: 400 })
+  }
+
+  return Response.json({ ok: true })
+}

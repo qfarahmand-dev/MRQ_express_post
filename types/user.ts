@@ -61,6 +61,7 @@ export const ROLE_CAPABILITIES: Record<UserRole, readonly Capability[]> = {
   admin: RBAC_CAPABILITIES,
   office_manager: [
     'shipments.view',
+    'shipments.manage',
     'employees.manage',
     'officeOperations.manage',
     'officeOperations.approve',
@@ -132,6 +133,80 @@ export type Permission = 'view' | 'create' | 'edit' | 'delete' | 'updateStatus'
  */
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   admin: ['view', 'create', 'edit', 'delete', 'updateStatus'],
-  office_manager: ['view', 'create', 'edit', 'updateStatus'],
+  office_manager: ['view', 'create', 'edit', 'delete', 'updateStatus'],
   storekeeper: ['view', 'create', 'edit', 'updateStatus'],
+}
+
+/**
+ * Centralized RBAC helper functions.
+ * All authorization checks flow through these functions so permission logic
+ * is not duplicated across components.
+ */
+
+/**
+ * Whether a user can create shipments.
+ * Admin: always allowed (no office restriction).
+ * Office Manager: allowed, shipment must belong to their office.
+ * Storekeeper: not allowed.
+ */
+export function canCreateShipment(user: AppUser | undefined): boolean {
+  if (!user || user.accountStatus !== 'active') return false
+  if (user.role === 'admin') return true
+  if (user.role === 'office_manager') return true
+  return false
+}
+
+/**
+ * Whether a user can delete a specific shipment.
+ * Admin: always allowed (system-wide).
+ * Office Manager: allowed only if the shipment belongs to their office.
+ * Storekeeper: not allowed.
+ */
+export function canDeleteShipment(user: AppUser | undefined, shipmentOfficeId: string | null): boolean {
+  if (!user || user.accountStatus !== 'active') return false
+  if (user.role === 'admin') return true
+  if (user.role === 'office_manager') {
+    return Boolean(shipmentOfficeId && shipmentOfficeId === user.officeId)
+  }
+  return false
+}
+
+/**
+ * Whether a user can access the Advanced Search page.
+ * Admin: always allowed.
+ * Office Manager: not allowed.
+ * Storekeeper: not allowed.
+ */
+export function canAccessAdvancedSearch(user: AppUser | undefined): boolean {
+  if (!user || user.accountStatus !== 'active') return false
+  return user.role === 'admin'
+}
+
+/**
+ * Whether a user can delete a specific user account.
+ * Admin: can delete any eligible user except themselves.
+ * Office Manager: can delete storekeepers from their own office only.
+ * Storekeeper: not allowed.
+ */
+export function canDeleteUser(
+  actor: AppUser | undefined,
+  target: { id: string; role: UserRole; officeId: string | null } | undefined,
+): boolean {
+  if (!actor || actor.accountStatus !== 'active') return false
+  if (!target) return false
+
+  // Cannot delete oneself
+  if (actor.id === target.id) return false
+
+  if (actor.role === 'admin') return true
+
+  if (actor.role === 'office_manager') {
+    return (
+      target.role === 'storekeeper' &&
+      Boolean(target.officeId) &&
+      target.officeId === actor.officeId
+    )
+  }
+
+  return false
 }

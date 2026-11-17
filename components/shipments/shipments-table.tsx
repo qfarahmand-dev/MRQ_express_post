@@ -19,6 +19,7 @@ import { formatDate, interpolate } from '@/lib/format'
 import { destinationCountries } from '@/lib/countries'
 import { cn } from '@/lib/utils'
 import type { Shipment } from '@/types/shipment'
+import { canDeleteShipment, type AppUser } from '@/types/user'
 
 interface ShipmentsTableProps {
   shipments: Shipment[]
@@ -30,7 +31,7 @@ interface ShipmentsTableProps {
 
 export function ShipmentsTable({ shipments, loading, compact, emptyMessage, onDelete }: ShipmentsTableProps) {
   const { t, lang } = useLanguage()
-  const { can } = useAuth()
+  const { user, can } = useAuth()
   const router = useRouter()
   const columnCount = compact ? 4 : 14
   const number = (value: number | null) => value === null ? t.shipments.notAssigned : new Intl.NumberFormat(lang).format(value)
@@ -158,7 +159,7 @@ export function ShipmentsTable({ shipments, loading, compact, emptyMessage, onDe
                         <Pencil aria-hidden="true" />
                         {t.common.edit}
                       </DropdownMenuItem>
-                      {can('delete') && onDelete && (
+                      {canDeleteShipment(user, shipment.officeId) && onDelete && (
                         <>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem variant="destructive" onClick={() => onDelete(shipment)}>

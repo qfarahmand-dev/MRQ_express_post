@@ -20,8 +20,8 @@ import { TRACKING_NUMBER_MAX_LENGTH, validateShipmentInput, type ShipmentFormErr
 import { shipmentService, ShipmentServiceError } from '@/services/shipment-service'
 import { PACKAGE_TYPES, SHIPPING_COMPANIES, type Shipment, type ShipmentInput, type ShipmentPhotoKind } from '@/types/shipment'
 
-const emptyInput = (): ShipmentInput => ({
-  officeId: null,
+const emptyInput = (officeId: string | null = null): ShipmentInput => ({
+  officeId,
   trackingNumber: '',
   destinationCountry: '',
   sender: { name: '', phone: '', address: '' },
@@ -74,7 +74,12 @@ export function ShipmentForm({ shipment }: { shipment?: Shipment }) {
   const { user } = useAuth()
   const router = useRouter()
   const isEdit = Boolean(shipment)
-  const [values, setValues] = useState<ShipmentInput>(() => (shipment ? toInput(shipment) : emptyInput()))
+  const [values, setValues] = useState<ShipmentInput>(() => {
+    if (shipment) return toInput(shipment)
+    // Office managers and storekeepers: office comes from their profile, not client input
+    const defaultOfficeId = user?.role === 'admin' ? null : user?.officeId ?? null
+    return emptyInput(defaultOfficeId)
+  })
   const [errors, setErrors] = useState<ShipmentFormErrors>({})
   const [trackingTaken, setTrackingTaken] = useState(false)
   const [senderIdPhoto, setSenderIdPhoto] = useState<File | null>(null)
