@@ -222,22 +222,35 @@ export async function POST(request: Request) {
 
   // Create the user directly in Supabase Auth with the initial password.
   // The database trigger creates the profile with must_change_password = true.
-  const { data: authUser, error: authError } = await adminClient.auth.admin.createUser({
-    email,
-    password: initialPassword,
-    user_metadata: {
-      full_name: fullName,
-      role,
-      office_id: officeId ?? null,
-    },
-    email_confirm: true,
-  })
+  let authUser: { user: { id: string; email?: string } | null } | null = null
+  let authCreateError: { message?: string; status?: number; code?: string } | null = null
 
-  if (authError || !authUser?.user) {
-    console.error('User creation failed:', {
-      message: authError?.message,
-      status: authError?.status,
-      code: authError?.code,
+  try {
+    const { data, error } = await adminClient.auth.admin.createUser({
+      email,
+      password: initialPassword,
+      user_metadata: {
+        full_name: fullName,
+        role,
+        office_id: officeId ?? null,
+      },
+      email_confirm: true,
+    })
+    authUser = data
+    authCreateError = error
+  } catch (err) {
+    // Capture diagnostic info from Postgres trigger exceptions without exposing secrets
+    authCreateError = {
+      message: err instanceof Error ? err.message : 'Database error creating new user',
+      status: 500,
+      code: undefined,
+    }
+  }
+
+  if (authCreateError || !authUser?.user) {    console.error('User creation failed:', {
+      message: authCreateError?.message,
+      status: authCreateError?.status,
+      code: authCreateError?.code,
     })
 
     return Response.json(
